@@ -55,7 +55,7 @@ const AppRouter: React.FC = () => {
         {/* Default admin page redirects to branches for now */}
             <Route index element={<Navigate to ='branches'/>} /> {/* Matches /admin */}
             <Route path="inventory" element={<InventoryManagement/>} />
-            <Route path="inventory/receiving" element={<InventoryReceiving/>}/>
+            <Route path="inventory/receive" element={<InventoryReceiving/>}/>
             <Route path="branches" element={<BranchManagement />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="products" element={<ProductList />} />

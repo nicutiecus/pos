@@ -1,10 +1,12 @@
 from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .serializers import StockReceiveSerializer, ProductCreateSerializer, CategorySerializer
+from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
+                           CategorySerializer, InventoryLogSerializer)
 from .services import receive_stock_service, create_product_service, create_category_service
-from .selectors import get_stock_levels, get_expiring_batches, get_categories
-from .selectors import get_products_for_tenant 
+from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
+                        get_inventory_logs, get_products_for_tenant) 
+from django.core.exceptions import PermissionDenied
 
 
 
@@ -30,12 +32,14 @@ class StockLevelApi(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, branch_id):
-        # Security: Ensure user has access to this branch
-        if not request.user.get_accessible_branches().filter(id=branch_id).exists():
-            return Response({"error": "Unauthorized branch access"}, status=status.HTTP_403_FORBIDDEN)
-
-        data = get_stock_levels(branch_id=branch_id, tenant_id=request.user.tenant.id)
-        return Response(data)
+        try:
+            # Notice we now pass 'user=request.user' instead of 'tenant_id'
+            data = get_stock_levels(user=request.user, branch_id=branch_id)
+            return Response(data, status=status.HTTP_200_OK)
+            
+        except PermissionDenied as e:
+            # ✅ Returns a 403 Forbidden if they try to view another branch
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
 class ExpiringStockApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -109,3 +113,17 @@ class CategoryListCreateApi(views.APIView):
         
         # Return the created category so the frontend can immediately add it to the dropdown
         return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
+    
+
+
+class InventoryLogListApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        branch_id = request.GET.get('branch_id')
+        
+        logs = get_inventory_logs(user=request.user, branch_id=branch_id)
+        
+        # Optional: Add Pagination here if lists get too long
+        serializer = InventoryLogSerializer(logs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -21,7 +21,7 @@ class CreateSaleApi(views.APIView):
                 branch_id=serializer.validated_data['branch_id'],
                 customer_id=serializer.validated_data.get('customer_id'),
                 items=serializer.validated_data['items'],
-                payment_data=serializer.validated_data.get('payment')
+                payments=serializer.validated_data.get('payments',[])
             )
             
             return Response({

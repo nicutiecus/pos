@@ -13,6 +13,9 @@ interface LoginResponse {
     role: 'Tenant_Admin' | 'Branch_Manager' | 'Cashier';
     tenant_id: number | null;
     branch_id: number | null;
+    first_name: string;
+    branch_name: string;
+
   };
 }
 
@@ -36,6 +39,9 @@ const Login: React.FC = () => {
       // 2. Call your backend
       const response = await api.post<LoginResponse>('/auth/login/', credentials);
 
+      // DEBUG: Look at this in your browser console to see exactly what the backend sends
+      console.log("Full Login Response:", response.data);
+
       // DEBUG: See exactly what the server sent
       //console.log("SERVER RESPONSE:", response.data);
       
@@ -49,6 +55,10 @@ const Login: React.FC = () => {
       localStorage.setItem('accessToken', access); 
       localStorage.setItem('refreshToken', refresh); // Good practice to store this too
       localStorage.setItem('userRole', user.role);
+      localStorage.setItem('userName', user.first_name || ''); 
+      localStorage.setItem('branchName', user.branch_name || '');
+      localStorage.setItem('branchId', user.branch_id?.toString() ||'' );
+      
       
       if (user.tenant_id) {
         localStorage.setItem('tenantId', user.tenant_id.toString());

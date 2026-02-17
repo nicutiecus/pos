@@ -69,3 +69,20 @@ def get_categories(*, user) -> list[Category]:
     Returns all categories belonging to the user's tenant.
     """
     return Category.objects.filter(tenant=user.tenant).order_by('name')
+
+
+def get_inventory_logs(*, user, branch_id=None):
+    """
+    Returns a history of all stock received (Inventory Batches).
+    """
+    query = InventoryBatch.objects.filter(tenant=user.tenant).select_related(
+        'product', 'branch'
+    ).order_by('-created_at')
+
+    # 🔒 Security: If not Admin, restrict to their branch
+    if user.role not in ['Admin', 'Tenant_Admin', 'Super_Admin']:
+        query = query.filter(branch_id=user.branch_id)
+    elif branch_id:
+        query = query.filter(branch_id=branch_id)
+
+    return query

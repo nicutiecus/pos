@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category
+from .models import Product, Category, InventoryBatch
 
 class StockReceiveItemSerializer(serializers.Serializer):
     product_id = serializers.UUIDField()
@@ -54,3 +54,18 @@ class CategorySerializer(serializers.ModelSerializer):
         if Category.objects.filter(name__iexact=value, tenant=user.tenant).exists():
             raise serializers.ValidationError("A category with this name already exists.")
         return value
+
+
+
+class InventoryLogSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+    received_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+
+    class Meta:
+        model = InventoryBatch
+        fields = [
+            'id', 'branch_name', 'product_name', 'batch_number',
+            'quantity_on_hand', 'cost_price_at_receipt', 
+            'expiry_date', 'status', 'received_date'
+        ]

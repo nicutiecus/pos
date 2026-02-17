@@ -15,3 +15,4 @@ class BranchSerializer(serializers.ModelSerializer):
         if Branch.objects.filter(tenant=user.tenant, code=value).exists():
             raise serializers.ValidationError("Branch code must be unique within your organization.")
         return value
+    

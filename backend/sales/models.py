@@ -70,6 +70,7 @@ class Payment(TenantAwareModel):
         CASH = 'Cash', _('Cash')
         TRANSFER = 'Transfer', _('Transfer')
         POS = 'POS', _('POS')
+        CREDIT = 'Credit', _('Credit')
 
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='payments')
     branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT, null=True)

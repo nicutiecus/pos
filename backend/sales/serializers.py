@@ -14,7 +14,7 @@ class CreateSaleSerializer(serializers.Serializer):
     branch_id = serializers.UUIDField()
     customer_id = serializers.UUIDField(required=False, allow_null=True)
     items = SaleItemSerializer(many=True)
-    payment = PaymentSerializer(required=False) # Optional (e.g. Credit Sale)
+    payments = serializers.ListField(child=PaymentSerializer(), required=False) # Optional (e.g. Credit Sale)
 
 class SalesOrderListSerializer(serializers.ModelSerializer):
     cashier_name = serializers.CharField(source='user.email', read_only=True)

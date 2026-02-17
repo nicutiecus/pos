@@ -1,5 +1,5 @@
 from django.urls import path
-from .apis import (StockReceiveApi, StockLevelApi, 
+from .apis import (StockReceiveApi, StockLevelApi, InventoryLogListApi,
                    ExpiringStockApi, ProductCreateApi, CategoryListCreateApi)
 
 urlpatterns = [
@@ -8,4 +8,5 @@ urlpatterns = [
     path('expiring/<uuid:branch_id>/', ExpiringStockApi.as_view(), name='stock-expiring'),
     path('products/', ProductCreateApi.as_view(), name='product-create'),
     path('categories/', CategoryListCreateApi.as_view(), name='category-list-create'),
+    path('logs/', InventoryLogListApi.as_view(), name='inventory-logs'),
 ]

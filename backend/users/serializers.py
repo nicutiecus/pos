@@ -37,8 +37,11 @@ class TenantTokenObtainPairSerializer(TokenObtainPairSerializer):
             'id': self.user.id,
             'email': self.user.email,
             'role': self.user.role,
+            'first_name': self.user.first_name,
             'tenant_id': self.user.tenant.id if self.user.tenant else None,
             'branch_id': self.user.branch.id if self.user.branch else None,
+            'branch_name': self.user.branch.name if self.user.branch else None
+            
         }
         
         # SimpleJWT calls the access token 'access' by default. 

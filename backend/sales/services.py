@@ -13,7 +13,7 @@ def create_sale_service(
     branch_id: str,
     customer_id: str = None,
     items: list[dict],
-    payment_data: dict = None
+    payments: list[dict]
 ) -> SalesOrder:
     """
     Core transactional logic for processing a sale.
@@ -121,46 +121,53 @@ def create_sale_service(
             if qty_needed > 0:
                 raise ValidationError(f"Insufficient stock for {product.name}. Shortage: {qty_needed}")
 
-        # 4. Update Order Totals
-        order.total_amount = total_order_amount
+        # 4. Process Multiple Payments
+        total_paid = Decimal('0.00')
         
-        # 5. Process Payment (If provided)
-        amount_paid = Decimal('0.00')
-        if payment_data:
-            amount_paid = Decimal(str(payment_data.get('amount', 0)))
-            if amount_paid > 0:
-                Payment.objects.create(
-                    tenant=user.tenant,
-                    branch=branch,
-                    order=order,
-                    method=payment_data.get('method', Payment.Method.CASH),
-                    amount=amount_paid,
-                    reference_code=payment_data.get('reference_code'),
-                    processed_by=user
-                )
-        
-        order.amount_paid = amount_paid
+        if payments:
+            for payment_data in payments:
+                amount = Decimal(str(payment_data['amount']))
+                method = payment_data['method']
+                ref = payment_data.get('reference_code', '')
 
-        # 6. Determine Status & Handle Credit
-        if amount_paid >= total_order_amount:
-            order.payment_status = SalesOrder.PaymentStatus.PAID
-        elif amount_paid > 0:
-            order.payment_status = SalesOrder.PaymentStatus.PARTIAL
-        else:
-            order.payment_status = SalesOrder.PaymentStatus.PENDING
+                if amount > 0:
+                    Payment.objects.create(
+                        tenant=user.tenant,
+                        branch=branch,
+                        order=order,
+                        method=method,
+                        amount=amount,
+                        reference_code=ref,
+                        processed_by=user
+                    )
+                    total_paid += amount
 
-        # 7. Update Customer Ledger (If debt exists)
-        debt_amount = total_order_amount - amount_paid
-        
+        order.amount_paid = total_paid
+
+        # 5. Calculate Debt & Validate Credit Rules
+        debt_amount = total_order_amount - total_paid
+
+        # Validation: Walk-in customers MUST pay in full
+        if debt_amount > 0 and not customer:
+            raise ValidationError(
+                f"Walk-in customers cannot take credit. Shortage: {debt_amount}"
+            )
+
+        # Validation: Overpayment (Optional - prevent negative debt)
+        if debt_amount < 0:
+             raise ValidationError(
+                f"Overpayment detected. Change due: {abs(debt_amount)}"
+            )
+
+        # 6. Handle Debt (Credit Sale)
         if debt_amount > 0:
-            if not customer:
-                raise ValidationError("Cannot allow credit sale (partial/pending) for walk-in customers.")
-            
             # Check Credit Limit
             if (customer.current_debt + debt_amount) > customer.credit_limit:
-                 raise ValidationError(f"Credit limit exceeded. Available credit: {customer.credit_limit - customer.current_debt}")
+                 raise ValidationError(
+                     f"Credit limit exceeded. Available: {customer.credit_limit - customer.current_debt}"
+                 )
 
-            # Lock Customer Row to update debt safely
+            # Lock & Update Customer Debt
             customer_obj = Customer.objects.select_for_update().get(id=customer.id)
             customer_obj.current_debt += debt_amount
             customer_obj.save()
@@ -172,8 +179,17 @@ def create_sale_service(
                 transaction_type=CustomerLedger.TransactionType.INVOICE,
                 amount=debt_amount,
                 balance_after=customer_obj.current_debt,
-                reference_id=order.id
+                reference_id=order.id,
+                notes=f"Credit sale (Order #{str(order.id)[:8]})"
             )
+
+        # 7. Update Final Status
+        if debt_amount == 0:
+            order.payment_status = SalesOrder.PaymentStatus.PAID
+        elif total_paid > 0:
+            order.payment_status = SalesOrder.PaymentStatus.PARTIAL
+        else:
+            order.payment_status = SalesOrder.PaymentStatus.PENDING
 
         order.save()
         return order
