@@ -18,7 +18,7 @@ import ManagerDashboard from '../features/manager-dash/ManagerDashboard';
 import POSOnboardingWizard from '../features/onboarding/Onboarding';
 import BranchManagement from '../features/admin-dash/BranchManagement';
 import UserManagement from '../features/admin-dash/UserManagement';
-//import ProductCatalog from '../features/inventory/ProductCatalog';
+import ProductCatalog from '../features/inventory/ProductCatalog';
 import ProductList from '../features/inventory/ProductList';
 import InventoryReceiving from '../features/inventory/InventoryReceiving';
 import StockTransferForm from '../features/inventory/transfers/StockTransferForm';
@@ -74,7 +74,7 @@ const AppRouter: React.FC = () => {
     {/* Reusing the Inventory components we built earlier */}
     <Route path="products" element={<ProductList />} />
     <Route path="receive" element={<InventoryReceiving />} />
-    
+    <Route path="product-catalog" element={<ProductCatalog />} />
     {/* Placeholder for staff management */}
     <Route path="cashiers" element={<div className="p-8">Cashier Management coming soon...</div>} />
     

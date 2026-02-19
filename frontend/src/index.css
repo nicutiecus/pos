@@ -1,1 +1,36 @@
-@import 'tailwindcss'
+@import 'tailwindcss';
+
+@media print {
+  @page {
+    margin: 0;
+    size: auto; /* auto is good, or specific size like '80mm' */
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: white;
+  }
+
+  /* SAFETY NET: If you ever print without react-to-print, 
+     this hides the sidebar/navbar so only the receipt shows.
+  */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Make the receipt visible */
+  .receipt-container, .receipt-container * {
+    visibility: visible;
+  }
+
+  /* Position the receipt at the absolute top-left */
+  .receipt-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0; /* Remove padding to save paper space */
+  }
+}

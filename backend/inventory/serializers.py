@@ -69,3 +69,19 @@ class InventoryLogSerializer(serializers.ModelSerializer):
             'quantity_on_hand', 'cost_price_at_receipt', 
             'expiry_date', 'status', 'received_date'
         ]
+
+
+class ProductCatalogSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            'id', 
+            'name', 
+            'sku', 
+            'description', 
+            'category_name', 
+            'unit_type', 
+            'selling_price', 
+        ]

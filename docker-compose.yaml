@@ -21,6 +21,12 @@ services:
       - db
     env_file:
       - .env
+  
+  redis:  # <--- THIS NAME MATTERS
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: always
 
 volumes:
   postgres_data:

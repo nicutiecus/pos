@@ -2,10 +2,9 @@ from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
-from .selectors import get_sales_list
-from .serializers import SalesOrderListSerializer
+from .selectors import get_sales_list, get_sale_detail
+from .serializers import SalesOrderListSerializer, SalesOrderDetailSerializer, CreateSaleSerializer 
 
-from .serializers import CreateSaleSerializer
 from .services import create_sale_service
 
 class CreateSaleApi(views.APIView):
@@ -52,4 +51,15 @@ class SalesListApi(views.APIView):
         
         # Pagination could be added here later
         serializer = SalesOrderListSerializer(sales, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+class SalesDetailApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, sale_id):
+        sale = get_sale_detail(user=request.user, sale_id=sale_id)
+        serializer = SalesOrderDetailSerializer(sale)
         return Response(serializer.data, status=status.HTTP_200_OK)

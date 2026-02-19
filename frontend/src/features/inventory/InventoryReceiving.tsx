@@ -100,6 +100,26 @@ const InventoryReceiving: React.FC = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+
+  // --- HELPER: Date Formatter ---
+  const formatDateForBackend = (dateStr: string): string => {
+    if (!dateStr) return '';
+    
+    // Case 1: Already YYYY-MM-DD (e.g. from <input type="date">)
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) return dateStr;
+
+    // Case 2: DD/MM/YYYY (e.g. from text input)
+    if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+            // Convert 25/12/2023 -> 2023-12-25
+            const [day, month, year] = parts;
+            return `${year}-${month}-${day}`;
+        }
+    }
+    return dateStr; // Fallback
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -112,6 +132,7 @@ const InventoryReceiving: React.FC = () => {
        return;
     }
 
+    const backendDate = formatDateForBackend(formData.expiry_date);
     try {
       // Payload matches the nested structure required by backend
       const payload = {
@@ -122,7 +143,7 @@ const InventoryReceiving: React.FC = () => {
                 quantity: Number(formData.quantity_received),
                 cost_price: formData.cost_price,
                 batch_number: formData.batch_number,
-                expiry_date: formData.expiry_date,
+                expiry_date: backendDate,
                 notes: formData.notes
             }
         ]
@@ -295,7 +316,7 @@ const InventoryReceiving: React.FC = () => {
                   </div>
                   <div className="flex justify-between items-center text-xs text-gray-500">
                     <span className="font-mono bg-gray-100 px-1 rounded">{log.batch_number || 'NO BATCH'}</span>
-                    <span>{new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span>{log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}</span>
                   </div>
                 </div>
               ))

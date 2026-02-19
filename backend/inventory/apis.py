@@ -5,7 +5,7 @@ from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            CategorySerializer, InventoryLogSerializer)
 from .services import receive_stock_service, create_product_service, create_category_service
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
-                        get_inventory_logs, get_products_for_tenant) 
+                        get_inventory_logs, get_products_for_tenant, get_product_catalog) 
 from django.core.exceptions import PermissionDenied
 
 
@@ -127,3 +127,13 @@ class InventoryLogListApi(views.APIView):
         # Optional: Add Pagination here if lists get too long
         serializer = InventoryLogSerializer(logs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+class ProductCatalogApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # The selector now handles Caching AND Serialization
+        data = get_product_catalog(user=request.user)
+        return Response(data, status=status.HTTP_200_OK)

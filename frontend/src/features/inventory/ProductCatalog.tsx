@@ -57,7 +57,7 @@ const ProductCatalog: React.FC = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await api.get('/products');
+      const response = await api.get('/inventory/products');
       setProducts(response.data);
     } catch (err) {
       console.error("Fetch failed", err);

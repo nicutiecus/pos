@@ -17,10 +17,11 @@ interface Customer {
   current_debt: number;
 }
 
+// FIX 1: Updated to Title Case (Cash, Transfer, POS)
 interface PaymentLine {
-  method: 'Cash' | 'Tansfer' | 'POS';
+  method: 'Cash' | 'Transfer' | 'POS'; 
   amount: number;
-  reference?: string; // For Transfer/POS ref
+  reference?: string;
 }
 
 const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
@@ -33,10 +34,12 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
   const [customerSearch, setCustomerSearch] = useState('');
   
   const [payments, setPayments] = useState<PaymentLine[]>([]);
-  const [currentMethod, setCurrentMethod] = useState<'Cash' | 'Transfer' | 'POS'>('Cash');
-  const [currentAmount, setCurrentAmount] = useState<string>(''); // String for input handling
+  
+  // FIX 2: Updated Default State to 'Cash'
+  const [currentMethod, setCurrentMethod] = useState<'Cash' | 'Transfer' | 'POS'>('Cash'); 
+  const [currentAmount, setCurrentAmount] = useState<string>('');
 
-  const branchId = localStorage.getItem('branchId')
+  const branchId = localStorage.getItem('branchId');
   
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -45,7 +48,7 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
   const balance = total - totalPaid;
   const isCreditSale = balance > 0;
 
-  // --- Load Customers (Mock or Real) ---
+  // --- Load Customers ---
   useEffect(() => {
     if (customerSearch.length > 2) {
       const search = async () => {
@@ -56,7 +59,7 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
             console.error("Customer search failed", err);
         }
       };
-      const timeoutId = setTimeout(search, 500); // Debounce
+      const timeoutId = setTimeout(search, 500); 
       return () => clearTimeout(timeoutId);
     }
   }, [customerSearch]);
@@ -66,16 +69,12 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
     const amount = Number(currentAmount);
     if (!amount || amount <= 0) return;
     
-    // Prevent overpaying (optional, but good UX)
     if (amount > balance && balance > 0) {
-        if(!window.confirm(`Amount (₦${amount}) exceeds balance (₦${balance}). Add as Change/Tip?`)) return;
+        if(!window.confirm(`Amount (₦${amount}) exceeds remaining balance (₦${balance}). Add excess as Change?`)) return;
     }
 
     setPayments([...payments, { method: currentMethod, amount }]);
-    setCurrentAmount(''); // Reset input
-    
-    // Auto-switch method if needed, or keep focus? 
-    // Usually cashiers like to stick to one unless specified.
+    setCurrentAmount(''); 
   };
 
   const removePaymentLine = (index: number) => {
@@ -85,7 +84,6 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
   };
 
   const handleCheckout = async () => {
-    // Validation Rule: Credit requires Customer
     if (isCreditSale && !selectedCustomer) {
       alert("⚠️ Credit sales require a registered customer.\nPlease select or create a customer.");
       return;
@@ -94,7 +92,7 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
     if (isCreditSale && selectedCustomer) {
         const newDebt = selectedCustomer.current_debt + balance;
         if (newDebt > selectedCustomer.credit_limit) {
-            if (!window.confirm(`⚠️ Credit Limit Warning!\nThis will push customer debt to ₦${newDebt.toLocaleString()}.\nLimit is ₦${selectedCustomer.credit_limit.toLocaleString()}.\nProceed anyway?`)) {
+            if (!window.confirm(`⚠️ Credit Limit Warning!\nNew Debt: ₦${newDebt.toLocaleString()}\nLimit: ₦${selectedCustomer.credit_limit.toLocaleString()}\nProceed anyway?`)) {
                 return;
             }
         }
@@ -103,14 +101,14 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
     setIsProcessing(true);
     try {
       const payload = {
-        customer_id: selectedCustomer?.id || null, // Null for walk-in (fully paid)
+        customer_id: selectedCustomer?.id || null, 
         total_amount: total,
         amount_paid: totalPaid,
         branch_id: branchId,
-        balance: balance, // Backend handles this as debt
+        balance: isCreditSale ? balance : 0, 
         status: isCreditSale ? 'PARTIAL' : 'PAID',
         
-        // The Split Payments List
+        // The values here are now 'Cash', 'Transfer', 'POS'
         payments: payments.map(p => ({
             method: p.method,
             amount: p.amount
@@ -127,12 +125,13 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
 
       alert(isCreditSale 
         ? `Sale Recorded!\nCustomer ${selectedCustomer?.name} owes ₦${balance.toLocaleString()}` 
-        : 'Sale Completed Successfully!');
+        : `Sale Completed! ${balance < 0 ? `\nChange Due: ₦${Math.abs(balance).toLocaleString()}` : ''}`);
         
       dispatch(clearCart());
       onClose();
       
     } catch (err: any) {
+      console.error(err);
       alert(`Transaction Failed: ${err.response?.data?.message || err.message}`);
     } finally {
       setIsProcessing(false);
@@ -157,7 +156,7 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
-          {/* 1. CUSTOMER SELECTION */}
+          {/* Customer Selection (Unchanged) */}
           <div className="space-y-2">
             <label className="text-sm font-bold text-gray-700">Customer (Required for Credit)</label>
             {selectedCustomer ? (
@@ -178,8 +177,6 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
                         onChange={(e) => setCustomerSearch(e.target.value)}
                     />
                     <span className="absolute left-2.5 top-2.5 text-gray-400">🔍</span>
-                    
-                    {/* Dropdown Results */}
                     {customers.length > 0 && (
                         <div className="absolute z-10 w-full bg-white border shadow-lg mt-1 rounded max-h-40 overflow-y-auto">
                             {customers.map(c => (
@@ -194,10 +191,11 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
             )}
           </div>
 
-          {/* 2. PAYMENT BUILDER */}
+          {/* Payment Builder */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Add Payment</label>
             <div className="flex space-x-2">
+                {/* FIX 3: Options updated to Title Case values */}
                 <select 
                     value={currentMethod} 
                     onChange={(e) => setCurrentMethod(e.target.value as any)}
@@ -223,8 +221,6 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
                     Add
                 </button>
             </div>
-            
-            {/* Quick Fill Buttons */}
             {balance > 0 && (
                 <div className="mt-2 flex gap-2">
                     <button onClick={() => setCurrentAmount(balance.toString())} className="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300">
@@ -234,7 +230,7 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
             )}
           </div>
 
-          {/* 3. PAYMENT LIST & SUMMARY */}
+          {/* Payment List (Unchanged) */}
           <div>
             <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">Payment Breakdown</h4>
             {payments.length === 0 ? (
@@ -253,7 +249,7 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
                 </div>
             )}
 
-            {/* Totals Section */}
+            {/* Totals */}
             <div className="mt-4 border-t pt-4 space-y-1">
                 <div className="flex justify-between text-sm text-gray-600">
                     <span>Total Due:</span>
@@ -272,21 +268,21 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
 
         </div>
 
-        {/* Footer Actions */}
+        {/* Footer */}
         <div className="p-6 bg-white border-t border-gray-200 flex space-x-4">
             <button onClick={onClose} className="flex-1 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 text-gray-700">
                 Cancel
             </button>
             <button 
                 onClick={handleCheckout}
-                disabled={isProcessing || (balance > 0 && !selectedCustomer) || (balance < 0 && true) /* Optionally block negative balance unless treated as change */} 
+                disabled={isProcessing || (isCreditSale && !selectedCustomer)} 
                 className={`flex-1 py-3 rounded-lg font-bold text-white shadow-lg transition-colors ${
-                    balance > 0 
-                        ? 'bg-orange-500 hover:bg-orange-600'  // Warning color for Credit
-                        : 'bg-green-600 hover:bg-green-700'    // Success color for Paid
+                    isCreditSale 
+                        ? 'bg-orange-500 hover:bg-orange-600' 
+                        : 'bg-green-600 hover:bg-green-700'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-                {isProcessing ? 'Processing...' : balance > 0 ? 'Confirm Credit Sale' : 'Complete Sale'}
+                {isProcessing ? 'Processing...' : isCreditSale ? 'Confirm Credit Sale' : 'Complete Sale'}
             </button>
         </div>
       </div>

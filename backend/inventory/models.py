@@ -24,6 +24,7 @@ class Product(TenantAwareModel):
     cost_price = models.DecimalField(max_digits=10, decimal_places=2)
     selling_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_type = models.CharField(max_length=10, choices=UnitType.choices)
+    description = models.TextField(blank=True, null=True)
     
     # Enterprise features
     has_sub_unit = models.BooleanField(default=False)
