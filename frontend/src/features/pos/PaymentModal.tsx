@@ -17,7 +17,6 @@ interface Customer {
   current_debt: number;
 }
 
-// FIX 1: Updated to Title Case (Cash, Transfer, POS)
 interface PaymentLine {
   method: 'Cash' | 'Transfer' | 'POS'; 
   amount: number;
@@ -29,18 +28,22 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
   const cartItems = useAppSelector(state => state.cart.items);
 
   // --- State ---
+  // Customer Search & Selection
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
   
-  const [payments, setPayments] = useState<PaymentLine[]>([]);
+  // New Customer Creation State
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [isSubmittingCustomer, setIsSubmittingCustomer] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '' });
   
-  // FIX 2: Updated Default State to 'Cash'
+  // Payments
+  const [payments, setPayments] = useState<PaymentLine[]>([]);
   const [currentMethod, setCurrentMethod] = useState<'Cash' | 'Transfer' | 'POS'>('Cash'); 
   const [currentAmount, setCurrentAmount] = useState<string>('');
 
   const branchId = localStorage.getItem('branchId');
-  
   const [isProcessing, setIsProcessing] = useState(false);
 
   // --- Calculations ---
@@ -50,10 +53,10 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
 
   // --- Load Customers ---
   useEffect(() => {
-    if (customerSearch.length > 2) {
+    if (customerSearch.length > 2 && !isCreatingCustomer) {
       const search = async () => {
         try {
-          const res = await api.get(`/customers?search=${customerSearch}`);
+          const res = await api.get(`/sales/customers?search=${customerSearch}`);
           setCustomers(res.data);
         } catch (err) {
             console.error("Customer search failed", err);
@@ -62,9 +65,34 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
       const timeoutId = setTimeout(search, 500); 
       return () => clearTimeout(timeoutId);
     }
-  }, [customerSearch]);
+  }, [customerSearch, isCreatingCustomer]);
 
   // --- Handlers ---
+  const handleCreateCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingCustomer(true);
+    try {
+      // Adjust endpoint if your backend uses something else (e.g. /customers/create/)
+      const res = await api.post('/sales/customers/', newCustomerForm);
+      
+      // Auto-select the newly created customer
+      setSelectedCustomer({
+          id: res.data.id,
+          name: res.data.name,
+          phone: res.data.phone,
+          credit_limit: res.data.credit_limit || 0,
+          current_debt: res.data.current_debt || 0
+      });
+      
+      setIsCreatingCustomer(false);
+      setNewCustomerForm({ name: '', phone: '' }); // Reset form
+    } catch (err: any) {
+      alert(`Failed to create customer: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setIsSubmittingCustomer(false);
+    }
+  };
+
   const addPaymentLine = () => {
     const amount = Number(currentAmount);
     if (!amount || amount <= 0) return;
@@ -108,7 +136,6 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
         balance: isCreditSale ? balance : 0, 
         status: isCreditSale ? 'PARTIAL' : 'PAID',
         
-        // The values here are now 'Cash', 'Transfer', 'POS'
         payments: payments.map(p => ({
             method: p.method,
             amount: p.amount
@@ -156,33 +183,84 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
-          {/* Customer Selection (Unchanged) */}
+          {/* 1. CUSTOMER SELECTION / CREATION */}
           <div className="space-y-2">
             <label className="text-sm font-bold text-gray-700">Customer (Required for Credit)</label>
-            {selectedCustomer ? (
+            
+            {isCreatingCustomer ? (
+                // --- CREATE NEW CUSTOMER FORM ---
+                <form onSubmit={handleCreateCustomer} className="bg-blue-50 p-4 rounded-lg border border-blue-200 shadow-inner space-y-3 animate-fade-in-down">
+                    <div className="flex justify-between items-center border-b border-blue-100 pb-2">
+                        <span className="font-bold text-sm text-blue-900">Add New Customer</span>
+                        <button type="button" onClick={() => setIsCreatingCustomer(false)} className="text-gray-500 text-xs hover:text-red-500">Cancel</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <input 
+                            type="text" 
+                            placeholder="Full Name" 
+                            required 
+                            value={newCustomerForm.name} 
+                            onChange={e => setNewCustomerForm({...newCustomerForm, name: e.target.value})} 
+                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-400 outline-none text-sm" 
+                        />
+                        <input 
+                            type="tel" 
+                            placeholder="Phone Number" 
+                            required 
+                            value={newCustomerForm.phone} 
+                            onChange={e => setNewCustomerForm({...newCustomerForm, phone: e.target.value})} 
+                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-400 outline-none text-sm" 
+                        />
+                    </div>
+                    <button 
+                        type="submit" 
+                        disabled={isSubmittingCustomer || !newCustomerForm.name || !newCustomerForm.phone} 
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white p-2 rounded text-sm font-bold disabled:opacity-50 transition-colors"
+                    >
+                        {isSubmittingCustomer ? 'Saving...' : 'Save & Select Customer'}
+                    </button>
+                </form>
+
+            ) : selectedCustomer ? (
+                // --- SELECTED CUSTOMER CARD ---
                 <div className="flex justify-between items-center bg-blue-50 p-3 rounded border border-blue-200">
                     <div>
                         <div className="font-bold text-blue-900">{selectedCustomer.name}</div>
                         <div className="text-xs text-blue-600">Current Debt: ₦{selectedCustomer.current_debt.toLocaleString()}</div>
                     </div>
-                    <button onClick={() => setSelectedCustomer(null)} className="text-red-500 text-xs hover:underline">Change</button>
+                    <button onClick={() => setSelectedCustomer(null)} className="text-red-500 text-xs hover:underline font-medium px-2">Change</button>
                 </div>
+
             ) : (
+                // --- SEARCH BAR ---
                 <div className="relative">
                     <input 
                         type="text" 
                         placeholder="Search Name or Phone..." 
-                        className="w-full border rounded p-2 pl-8 focus:ring-2 focus:ring-blue-500"
+                        className="w-full border rounded p-2 pl-8 focus:ring-2 focus:ring-blue-500 outline-none"
                         value={customerSearch}
                         onChange={(e) => setCustomerSearch(e.target.value)}
                     />
                     <span className="absolute left-2.5 top-2.5 text-gray-400">🔍</span>
-                    {customers.length > 0 && (
+                    
+                    {/* Add New Customer Button */}
+                    <div className="mt-2 text-right">
+                        <button 
+                            type="button" 
+                            onClick={() => setIsCreatingCustomer(true)} 
+                            className="text-sm text-blue-600 hover:text-blue-800 font-bold"
+                        >
+                            + Add New Customer
+                        </button>
+                    </div>
+
+                    {/* Search Results Dropdown */}
+                    {customers.length > 0 && customerSearch.length > 2 && (
                         <div className="absolute z-10 w-full bg-white border shadow-lg mt-1 rounded max-h-40 overflow-y-auto">
                             {customers.map(c => (
-                                <button key={c.id} onClick={() => { setSelectedCustomer(c); setCustomers([]); }}
+                                <button key={c.id} onClick={() => { setSelectedCustomer(c); setCustomers([]); setCustomerSearch(''); }}
                                     className="w-full text-left p-2 hover:bg-gray-100 border-b text-sm">
-                                    {c.name} ({c.phone})
+                                    <span className="font-bold text-gray-800">{c.name}</span> <span className="text-gray-500">({c.phone})</span>
                                 </button>
                             ))}
                         </div>
@@ -191,15 +269,14 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
             )}
           </div>
 
-          {/* Payment Builder */}
+          {/* 2. PAYMENT BUILDER */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Add Payment</label>
             <div className="flex space-x-2">
-                {/* FIX 3: Options updated to Title Case values */}
                 <select 
                     value={currentMethod} 
                     onChange={(e) => setCurrentMethod(e.target.value as any)}
-                    className="border rounded p-2 bg-white flex-1"
+                    className="border rounded p-2 bg-white flex-1 outline-none focus:ring-2 focus:ring-blue-500"
                 >
                     <option value="Cash">Cash</option>
                     <option value="POS">POS / Card</option>
@@ -211,26 +288,26 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
                     value={currentAmount}
                     onChange={(e) => setCurrentAmount(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addPaymentLine()}
-                    className="border rounded p-2 w-32"
+                    className="border rounded p-2 w-32 outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button 
                     onClick={addPaymentLine}
                     disabled={!currentAmount}
-                    className="bg-blue-600 text-white px-4 rounded font-bold hover:bg-blue-700 disabled:opacity-50"
+                    className="bg-blue-600 text-white px-4 rounded font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                     Add
                 </button>
             </div>
             {balance > 0 && (
                 <div className="mt-2 flex gap-2">
-                    <button onClick={() => setCurrentAmount(balance.toString())} className="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300">
+                    <button onClick={() => setCurrentAmount(balance.toString())} className="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300 transition-colors font-medium text-gray-700">
                         Full Balance (₦{balance})
                     </button>
                 </div>
             )}
           </div>
 
-          {/* Payment List (Unchanged) */}
+          {/* 3. PAYMENT LIST & SUMMARY */}
           <div>
             <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">Payment Breakdown</h4>
             {payments.length === 0 ? (
@@ -238,18 +315,18 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
             ) : (
                 <div className="space-y-2">
                     {payments.map((p, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border border-gray-100 shadow-sm">
-                            <span className="text-sm font-medium">{p.method}</span>
+                        <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border border-gray-100 shadow-sm animate-fade-in">
+                            <span className="text-sm font-medium text-gray-700">{p.method}</span>
                             <div className="flex items-center space-x-3">
-                                <span className="font-mono font-bold">₦{p.amount.toLocaleString()}</span>
-                                <button onClick={() => removePaymentLine(idx)} className="text-red-400 hover:text-red-600">×</button>
+                                <span className="font-mono font-bold text-gray-900">₦{p.amount.toLocaleString()}</span>
+                                <button onClick={() => removePaymentLine(idx)} className="text-gray-300 hover:text-red-500 transition-colors text-lg leading-none">&times;</button>
                             </div>
                         </div>
                     ))}
                 </div>
             )}
 
-            {/* Totals */}
+            {/* Totals Section */}
             <div className="mt-4 border-t pt-4 space-y-1">
                 <div className="flex justify-between text-sm text-gray-600">
                     <span>Total Due:</span>
@@ -268,9 +345,9 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
 
         </div>
 
-        {/* Footer */}
+        {/* Footer Actions */}
         <div className="p-6 bg-white border-t border-gray-200 flex space-x-4">
-            <button onClick={onClose} className="flex-1 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 text-gray-700">
+            <button onClick={onClose} className="flex-1 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 text-gray-700 transition-colors">
                 Cancel
             </button>
             <button 

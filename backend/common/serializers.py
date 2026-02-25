@@ -1,6 +1,6 @@
 # common/serializers.py
 from rest_framework import serializers
-from .models import Branch
+from .models import Branch, TenantSettings
 
 class BranchSerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,3 +16,11 @@ class BranchSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Branch code must be unique within your organization.")
         return value
     
+
+class TenantSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TenantSettings
+        fields = [
+            'business_name', 'address', 'phone', 'email',
+            'currency_symbol', 'tax_rate', 'receipt_footer'
+        ]

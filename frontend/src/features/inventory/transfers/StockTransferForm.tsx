@@ -38,7 +38,7 @@ const StockTransferForm: React.FC = () => {
     const loadData = async () => {
       try {
         const [prodRes, branchRes] = await Promise.all([
-          api.get('/products'), // Should return products with current_stock for THIS branch
+          api.get('/inventory/products'), // Should return products with current_stock for THIS branch
           api.get('/branches')  // List of other branches
         ]);
         

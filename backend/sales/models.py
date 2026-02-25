@@ -7,8 +7,10 @@ from common.models import TenantAwareModel
 class Customer(TenantAwareModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=150, db_index=True)
+    email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
-    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    address = models.CharField(max_length=150, null=True, blank =True)
+    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=100000.00)
     current_debt = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     class Meta:
@@ -27,7 +29,16 @@ class CustomerLedger(TenantAwareModel):
     transaction_type = models.CharField(max_length=20, choices=TransactionType.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     balance_after = models.DecimalField(max_digits=12, decimal_places=2)
-    reference_id = models.IntegerField(null=True, blank=True) 
+    reference_id = models.CharField(max_length=255, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+
+    branch = models.ForeignKey(
+        'common.Branch', 
+        on_delete=models.PROTECT, 
+        null=True, 
+        blank=True,
+        help_text="The branch where this transaction occurred"
+    )
 
     class Meta:
         db_table = 'customer_ledger'

@@ -12,6 +12,7 @@ import Login from '../pages/Login';
 import ProtectedRoute from './ProtectedRoute';
 import ManagerLayout from '../layouts/ManagerLayout';
 import ManagerDashboard from '../features/manager-dash/ManagerDashboard';
+import AdminDashboard from '../features/admin-dash/AdminDashboard';
 
 
 // Import features
@@ -24,6 +25,8 @@ import InventoryReceiving from '../features/inventory/InventoryReceiving';
 import StockTransferForm from '../features/inventory/transfers/StockTransferForm';
 import CategoryManagement from '../features/inventory/CategoryManagement';
 import InventoryManagement from '../features/inventory/InventoryManagement';
+import ReportsDashboard from '../features/reports/ReportsDashboard';
+import CustomerManagement from '../features/customers/CustomerManagement';
 // import POS
 import POSMain from '../features/pos/POSMain';
 import SalesHistory from '../features/pos/SalesHistory';
@@ -53,13 +56,16 @@ const AppRouter: React.FC = () => {
       <Route element={<ProtectedRoute allowedRoles={['Tenant_Admin']} />}>
         <Route path="/admin" element={<AdminLayout />}>
         {/* Default admin page redirects to branches for now */}
-            <Route index element={<Navigate to ='branches'/>} /> {/* Matches /admin */}
+            <Route index element={<Navigate to ='dashboard'/>} /> {/* Matches /admin */}
             <Route path="inventory" element={<InventoryManagement/>} />
             <Route path="inventory/receive" element={<InventoryReceiving/>}/>
             <Route path="branches" element={<BranchManagement />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="products" element={<ProductList />} />
             <Route path ="categories" element={<CategoryManagement/>}/>
+            <Route path ="reports" element={<ReportsDashboard/>}/>
+            <Route path ="customers" element={<CustomerManagement/>}/>
+            <Route path="dashboard" element={<AdminDashboard/>}/>
         </Route>
       </Route>
 
@@ -75,8 +81,12 @@ const AppRouter: React.FC = () => {
     <Route path="products" element={<ProductList />} />
     <Route path="receive" element={<InventoryReceiving />} />
     <Route path="product-catalog" element={<ProductCatalog />} />
+    
+    <Route path ="reports" element={<ReportsDashboard/>}/>
     {/* Placeholder for staff management */}
     <Route path="cashiers" element={<div className="p-8">Cashier Management coming soon...</div>} />
+    <Route path ="customers" element={<CustomerManagement/>}/>
+    
     
   </Route>
 </Route>

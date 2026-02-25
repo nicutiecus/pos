@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'inventory',
     'sales',
     'finance',
+    'reports',
 ]
 
 MIDDLEWARE = [
@@ -178,3 +179,4 @@ CACHES = {
         }
     }
 }
+

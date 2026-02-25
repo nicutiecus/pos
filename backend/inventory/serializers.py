@@ -8,6 +8,8 @@ class StockReceiveItemSerializer(serializers.Serializer):
     batch_number = serializers.CharField(max_length=50) # Supplier's batch No. or Auto-generated
     expiry_date = serializers.DateField(required=False, allow_null=True)
 
+    #fields= ['product_id', 'quantity', 'cost_price','batch_number', 'expiry_date', 'created_at']
+
 class StockReceiveSerializer(serializers.Serializer):
     """
     Accepts a list of items to receive into a specific branch.
@@ -61,13 +63,14 @@ class InventoryLogSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     branch_name = serializers.CharField(source='branch.name', read_only=True)
     received_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+    
 
     class Meta:
         model = InventoryBatch
         fields = [
             'id', 'branch_name', 'product_name', 'batch_number',
             'quantity_on_hand', 'cost_price_at_receipt', 
-            'expiry_date', 'status', 'received_date'
+            'expiry_date', 'status', 'received_date', 'created_at'
         ]
 
 

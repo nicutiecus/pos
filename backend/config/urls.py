@@ -18,8 +18,8 @@ urlpatterns = [
     
     # Dashboard Resources
     path('api/', include(router.urls)),
-
     path('api/inventory/', include('inventory.urls')),
     path('api/sales/', include('sales.urls')),
     path('api/common/', include('common.urls')),
+    path('api/reports/', include('reports.urls')),
 ]

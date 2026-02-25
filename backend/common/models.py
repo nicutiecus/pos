@@ -47,3 +47,25 @@ class Branch(TenantAwareModel):
 
     def __str__(self):
         return f"{self.name} ({self.code})"
+    
+
+
+class TenantSettings(TenantAwareModel):
+    # Store Details (For Receipts)
+    business_name = models.CharField(max_length=255, default="My Business")
+    address = models.TextField(blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    
+    # Financial Settings
+    currency_symbol = models.CharField(max_length=5, default="₦")
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Percentage (e.g., 7.5)")
+    
+    # Receipt Customization
+    receipt_footer = models.TextField(default="Thank you for your patronage!", blank=True)
+    
+    # Logo (Optional - requires Pillow library)
+    # logo = models.ImageField(upload_to='logos/', blank=True, null=True)
+
+    def __str__(self):
+        return f"Settings for {self.tenant.name}"

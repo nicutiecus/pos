@@ -1,4 +1,4 @@
-from .models import SalesOrder
+from .models import SalesOrder, CustomerLedger
 from django.shortcuts import get_object_or_404
 
 def get_sales_list(*, user, branch_id=None):
@@ -43,3 +43,10 @@ def get_sale_detail(*, user, sale_id):
 
     return get_object_or_404(qs, id=sale_id)
 
+
+
+def get_customer_ledger(*, user, customer_id: str):
+    return CustomerLedger.objects.filter(
+        tenant=user.tenant, 
+        customer_id=customer_id
+    ).order_by('-created_at')

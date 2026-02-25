@@ -2,6 +2,9 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from common.models import Branch
 from .models import Product, InventoryBatch, Category
+import random
+import string
+
 
 def receive_stock_service(
     *, 
@@ -66,3 +69,59 @@ def create_category_service(*, user, name: str) -> Category:
         name=name
     )
     return category
+
+
+
+def generate_receipt_ref():
+    """Generates a short, unique reference like PAY-8X92B"""
+    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    return f"PAY-{suffix}"
+
+def pay_customer_debt_service(
+    *, 
+    user, 
+    customer_id: str, 
+    branch_id: str, 
+    amount: float, 
+    method: str, 
+    notes: str = ""
+):
+    branch = Branch.objects.filter(id=branch_id, tenant=user.tenant).first()
+    if not branch:
+        raise ValidationError("Invalid branch.")
+
+    with transaction.atomic():
+        try:
+            customer = Customer.objects.select_for_update().get(id=customer_id, tenant=user.tenant)
+        except Customer.DoesNotExist:
+            raise ValidationError("Customer not found.")
+
+        if amount <= 0:
+            raise ValidationError("Payment amount must be greater than zero.")
+            
+        if amount > customer.current_debt:
+            raise ValidationError(f"Amount exceeds debt. Outstanding: {customer.current_debt}")
+
+        # 1. Update Debt
+        customer.current_debt -= amount
+        customer.save()
+
+        # 2. Generate Invoice Number
+        invoice_number = generate_receipt_ref()
+
+        # 3. Create Ledger Entry
+        ledger = CustomerLedger.objects.create(
+            tenant=user.tenant,
+            branch=branch,
+            customer=customer,
+            transaction_type=CustomerLedger.TransactionType.PAYMENT,
+            amount=amount,
+            balance_after=customer.current_debt,
+            
+            # ✅ STORE THE INVOICE NUMBER HERE
+            reference_id=invoice_number, 
+            
+            notes=notes or f"Debt payment via {method}"
+        )
+
+        return ledger

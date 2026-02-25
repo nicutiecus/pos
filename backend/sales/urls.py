@@ -1,8 +1,22 @@
-from django.urls import path
-from .apis import CreateSaleApi, SalesListApi, SalesDetailApi
+from django.urls import path, include
+from .apis import (CreateSaleApi, SalesListApi, SalesDetailApi, 
+                   PayDebtApi, CustomerLedgerApi)
+from rest_framework.routers import DefaultRouter
+from .views import CustomerViewSet
+
+
+router = DefaultRouter()
+router.register(r'customers', CustomerViewSet, basename='customers')
 
 urlpatterns = [
+    # Customer CRUD endpoints (e.g., POST /api/sales/customers/ to add a customer)
+    path('', include(router.urls)),
+    # Custom Customer Actions
+    path('customers/<uuid:customer_id>/pay-debt/', PayDebtApi.as_view(), name='pay-debt'),
+    path('customers/<uuid:customer_id>/ledger/', CustomerLedgerApi.as_view(), name='customer-ledger'),
+
     path('create/', CreateSaleApi.as_view(), name='create-sale'),
     path('list/', SalesListApi.as_view(), name = 'sales-list'),
     path('<uuid:sale_id>/', SalesDetailApi.as_view(), name='sales-detail'),
+   
 ]

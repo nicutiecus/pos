@@ -2,10 +2,16 @@ from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
-from .selectors import get_sales_list, get_sale_detail
-from .serializers import SalesOrderListSerializer, SalesOrderDetailSerializer, CreateSaleSerializer 
+from .selectors import get_sales_list, get_sale_detail, get_customer_ledger
+from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer, 
+                          CreateSaleSerializer, PayDebtSerializer, CustomerLedgerSerializer)
 
-from .services import create_sale_service
+from .services import create_sale_service, pay_customer_debt_service
+from .serializers import PayDebtSerializer
+
+
+
+
 
 class CreateSaleApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -63,3 +69,41 @@ class SalesDetailApi(views.APIView):
         sale = get_sale_detail(user=request.user, sale_id=sale_id)
         serializer = SalesOrderDetailSerializer(sale)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+class CustomerLedgerApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, customer_id):
+        ledger_records = get_customer_ledger(user=request.user, customer_id=customer_id)
+        serializer = CustomerLedgerSerializer(ledger_records, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+class PayDebtApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, customer_id):
+        serializer = PayDebtSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            ledger = pay_customer_debt_service(
+                user=request.user,
+                customer_id=customer_id,
+                branch_id=serializer.validated_data['branch_id'],
+                amount=serializer.validated_data['amount'],
+                method=serializer.validated_data['method'],
+                notes=serializer.validated_data.get('notes', '')
+            )
+            
+            return Response({
+                "message": "Payment successful",
+                "new_balance": ledger.balance_after,
+                "transaction_id": ledger.id
+            }, status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)

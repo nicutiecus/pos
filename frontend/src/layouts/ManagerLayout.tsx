@@ -47,6 +47,13 @@ const ManagerLayout: React.FC = () => {
             <span className="font-medium">Product Catalog</span>
           </Link>
 
+          
+          <Link to="/manager/customers" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${isActive('/manager/customers') ? 'bg-blue-600 text-white' : 'hover:bg-slate-700 text-slate-300'}`}>
+            <span>📦</span>
+            <span className="font-medium">Customers</span>
+          </Link>
+
           {/* Placeholder for future features */}
           <div className="pt-4 mt-4 border-t border-slate-700">
             <span className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff</span>
