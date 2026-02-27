@@ -2,13 +2,16 @@ from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
-                           CategorySerializer, InventoryLogSerializer)
-from .services import receive_stock_service, create_product_service, create_category_service
+                           CategorySerializer, InventoryLogSerializer, 
+                           StockTransferSerializer, StockTransferLogSerializer)
+from .services import (receive_stock_service, create_product_service, 
+                       create_category_service, accept_transfer_service, initiate_transfer_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
-                        get_inventory_logs, get_products_for_tenant, get_product_catalog) 
-from django.core.exceptions import PermissionDenied
-
-
+                        get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
+                        )
+from django.core.exceptions import PermissionDenied, ValidationError
+from .serializers import StockTransferLogSerializer
+from .models import StockTransferLog
 
 class StockReceiveApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -137,3 +140,70 @@ class ProductCatalogApi(views.APIView):
         # The selector now handles Caching AND Serialization
         data = get_product_catalog(user=request.user)
         return Response(data, status=status.HTTP_200_OK)
+
+
+
+class StockTransferApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = StockTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            transfer_log = initiate_transfer_service(
+                user=request.user,
+                source_branch_id=serializer.validated_data['source_branch_id'],
+                destination_branch_id=serializer.validated_data['destination_branch_id'],
+                product_id=serializer.validated_data['product_id'],
+                quantity=serializer.validated_data['quantity'],
+                notes=serializer.validated_data.get('notes', '')
+            )
+            response_data = StockTransferLogSerializer(transfer_log).data
+            
+            return Response({
+                "message": "Stock transferred successfully.",
+                "details": response_data
+            }, status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+
+class StockTransferLogListApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        branch_id = request.GET.get('branch_id')
+        # Read new filters from the URL
+        status_filter = request.GET.get('status')
+        direction = request.GET.get('direction')
+        
+        logs = get_stock_transfer_logs(user=request.user, branch_id=branch_id,
+                                       status=status_filter, direction=direction)
+        serializer = StockTransferLogSerializer(logs, many=True)
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+class AcceptTransferApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, transfer_id):
+        try:
+            transfer = accept_transfer_service(
+                user=request.user, 
+                transfer_id=transfer_id
+            )
+            return Response({
+                "message": "Stock received and added to inventory.",
+                "status": transfer.status
+            }, status=status.HTTP_200_OK)
+            
+        except StockTransferLog.DoesNotExist:
+            return Response({"error": "Transfer record not found."}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)

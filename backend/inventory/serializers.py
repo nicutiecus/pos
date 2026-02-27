@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category, InventoryBatch
+from .models import Product, Category, InventoryBatch, StockTransferLog
 
 class StockReceiveItemSerializer(serializers.Serializer):
     product_id = serializers.UUIDField()
@@ -87,4 +87,29 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             'category_name', 
             'unit_type', 
             'selling_price', 
+        ]
+
+
+
+class StockTransferSerializer(serializers.Serializer):
+    source_branch_id = serializers.UUIDField()
+    destination_branch_id = serializers.UUIDField()
+    product_id = serializers.UUIDField()
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+# inventory/serializers.py
+
+class StockTransferLogSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    source_branch_name = serializers.CharField(source='source_branch.name', read_only=True)
+    destination_branch_name = serializers.CharField(source='destination_branch.name', read_only=True)
+    transferred_by_email = serializers.CharField(source='transferred_by.email', read_only=True, default="System")
+    formatted_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+
+    class Meta:
+        model = StockTransferLog
+        fields = [
+            'id', 'product_name', 'source_branch_name', 'destination_branch_name',
+            'quantity', 'transferred_by_email', 'notes', 'formatted_date', 'status'
         ]

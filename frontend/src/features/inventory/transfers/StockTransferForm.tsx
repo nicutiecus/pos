@@ -39,7 +39,7 @@ const StockTransferForm: React.FC = () => {
       try {
         const [prodRes, branchRes] = await Promise.all([
           api.get('/inventory/products'), // Should return products with current_stock for THIS branch
-          api.get('/branches')  // List of other branches
+          api.get('/branches/destinations')  // List of other branches
         ]);
         
         setProducts(prodRes.data);

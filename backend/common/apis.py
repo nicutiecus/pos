@@ -1,8 +1,8 @@
 from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-
-from .selectors import get_branches_for_tenant, get_tenant_settings
+from .selectors import (get_transfer_destination_branches, 
+                        get_branches_for_tenant, get_tenant_settings)
 from .serializers import BranchSerializer, TenantSettingsSerializer
 
 class BranchListApi(views.APIView):
@@ -32,3 +32,14 @@ class TenantSettingsApi(views.APIView):
         serializer.save()
         
         return Response(serializer.data)
+    
+
+
+
+class TransferDestinationBranchListApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        branches = get_transfer_destination_branches(user=request.user)
+        serializer = BranchSerializer(branches, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

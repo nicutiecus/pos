@@ -24,3 +24,16 @@ def get_tenant_settings(*, user):
         }
     )
     return settings
+
+
+
+def get_transfer_destination_branches(*, user):
+    """
+    Returns all branches for the tenant, excluding the user's current branch.
+    """
+    qs = Branch.objects.filter(tenant=user.tenant)
+    
+    if user.branch_id:
+        qs = qs.exclude(id=user.branch_id) # Remove their own branch
+        
+    return qs

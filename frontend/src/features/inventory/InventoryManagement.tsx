@@ -8,10 +8,10 @@ interface InventoryItem {
   product_name: string;
   sku: string;
   category: string;
-  current_stock: number;
+  total_quantity: number;
   unit_type: string;
   avg_cost_price: number; // Backend usually calculates weighted average
-  total_value: number;    // current_stock * avg_cost_price
+  total_value: number;    // total_quantity * avg_cost_price
   low_stock_threshold: number;
 }
 
@@ -33,7 +33,9 @@ const InventoryManagement: React.FC = () => {
   
   // Dashboard Metrics
   const totalValue = inventory.reduce((sum, item) => sum + Number(item.total_value), 0);
-  const lowStockCount = inventory.filter(i => i.current_stock <= i.low_stock_threshold).length;
+  const lowStockCount = inventory.filter(i => i.total_quantity <= i.low_stock_threshold).length;
+
+  const branchId = localStorage.getItem('branchId');
 
   useEffect(() => {
     fetchData();
@@ -43,7 +45,7 @@ const InventoryManagement: React.FC = () => {
     setIsLoading(true);
     try {
       if (activeTab === 'STOCK') {
-        const res = await api.get('/inventory/summary'); // Aggregated View
+        const res = await api.get(`inventory/levels/${branchId}`); // Aggregated View
         setInventory(res.data);
       } else {
         const res = await api.get('/inventory/logs?limit=50'); // Audit Trail
@@ -142,12 +144,12 @@ const InventoryManagement: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <span className={`text-sm font-bold mr-2 ${
-                        item.current_stock <= item.low_stock_threshold ? 'text-red-600' : 'text-gray-900'
+                        item.total_quantity <= item.low_stock_threshold ? 'text-red-600' : 'text-gray-900'
                       }`}>
-                        {item.current_stock}
+                        {item.total_quantity}
                       </span>
                       <span className="text-xs text-gray-500">{item.unit_type}</span>
-                      {item.current_stock <= item.low_stock_threshold && (
+                      {item.total_quantity <= item.low_stock_threshold && (
                         <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
                           Low
                         </span>

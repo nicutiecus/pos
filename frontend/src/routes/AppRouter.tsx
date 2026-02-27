@@ -27,6 +27,8 @@ import CategoryManagement from '../features/inventory/CategoryManagement';
 import InventoryManagement from '../features/inventory/InventoryManagement';
 import ReportsDashboard from '../features/reports/ReportsDashboard';
 import CustomerManagement from '../features/customers/CustomerManagement';
+//new transfer form
+import StockTransfers from '../features/inventory/transfers/StockTransfers';
 // import POS
 import POSMain from '../features/pos/POSMain';
 import SalesHistory from '../features/pos/SalesHistory';
@@ -74,6 +76,7 @@ const AppRouter: React.FC = () => {
   <Route path="/manager" element={<ManagerLayout />}>
   {/* Stock transfer */}
   <Route path="transfer" element={<StockTransferForm />} />
+  <Route path="transfer2" element={<StockTransfers />} />
     {/* Dashboard Home */}
     <Route index element={<ManagerDashboard />} />
     
@@ -81,6 +84,7 @@ const AppRouter: React.FC = () => {
     <Route path="products" element={<ProductList />} />
     <Route path="receive" element={<InventoryReceiving />} />
     <Route path="product-catalog" element={<ProductCatalog />} />
+    <Route path="inventory" element={<InventoryManagement/>} />
     
     <Route path ="reports" element={<ReportsDashboard/>}/>
     {/* Placeholder for staff management */}

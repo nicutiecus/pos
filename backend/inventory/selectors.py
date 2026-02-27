@@ -1,9 +1,10 @@
 from django.db.models import Sum, F, Q
 from django.utils import timezone
-from .models import InventoryBatch, Product, Category
+from .models import InventoryBatch, Product, Category, StockTransferLog
 from django.utils import timezone
 from django.core.exceptions import PermissionDenied
-from .models import InventoryBatch, Product
+
+
 
 def get_stock_levels(*, user, branch_id: str):
     """
@@ -115,3 +116,32 @@ def get_product_catalog(*, user):
     cache.set(cache_key, data, timeout=60 * 60 * 24)
 
     return data
+
+
+
+
+def get_stock_transfer_logs(*, user, status=None, direction=None, branch_id=None):
+    qs = StockTransferLog.objects.filter(tenant=user.tenant).select_related(
+        'source_branch', 'destination_branch', 'product', 'transferred_by'
+    ).order_by('-created_at')
+
+    # 🔒 Security: If not an Admin, force the branch_id to their own branch
+    if user.role not in ['Admin', 'Tenant_Admin', 'Super_Admin']:
+        branch_id = user.branch_id
+
+    # Filter by branch (either it came from here, or it went to here)
+    if branch_id:
+        if direction == 'incoming':
+            qs =qs.filter(destination_branch_id=branch_id)
+        elif direction=='outgoing':
+            qs =qs.filter(source_branch_id=branch_id)
+        else:
+            # default to show both
+            qs = qs.filter(
+                Q(source_branch_id=branch_id) | Q(destination_branch_id=branch_id)
+            )
+    if status:
+        qs = qs.filter(status=status)
+
+    return qs.order_by('-created_at')
+

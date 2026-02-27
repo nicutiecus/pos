@@ -22,7 +22,7 @@ const IncomingTransfers: React.FC = () => {
 
   const fetchIncoming = async () => {
     try {
-      const res = await api.get('/transfers/incoming'); // Endpoint filtering for status=PENDING
+      const res = await api.get('/inventory/transfer/logs/?direction=incoming&status=Pending'); // Endpoint filtering for status=PENDING
       setTransfers(res.data);
     } catch (err) {
       console.error("Failed to load incoming transfers", err);
@@ -36,7 +36,7 @@ const IncomingTransfers: React.FC = () => {
     
     setProcessingId(id);
     try {
-      await api.post(`/transfers/${id}/acknowledge`);
+      await api.post('/inventory/transfer/<uuid:transfer_id>/accept/');
       // Remove from list immediately on success
       setTransfers(transfers.filter(t => t.id !== id));
       alert("Stock received and added to inventory!");
