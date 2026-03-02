@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import api from '../../api/axiosInstance';
 import { useAppDispatch } from '../../store/hooks';
 import { addToCart } from '../../store/slices/cartSlice';
+// Import your new offline DB utilities
+import { saveProductsLocally, getLocalProducts } from '../../utils/offlineDB';
 
 // --- Interfaces ---
 
@@ -22,7 +24,7 @@ interface StockItem {
 }
 
 // 3. Merged Data (What the Grid displays)
-interface Product extends CatalogItem {
+export interface Product extends CatalogItem {
   available_qty: number;
 }
 
@@ -32,6 +34,9 @@ const ProductGrid: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   
+  // New state to track if we are running from the local cache
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  
   const branchId = localStorage.getItem('branchId');
 
   useEffect(() => {
@@ -40,35 +45,51 @@ const ProductGrid: React.FC = () => {
       try {
         if (!branchId) throw new Error("Branch ID missing");
 
-        // 1. Parallel Fetch: Get Catalog AND Stock Levels simultaneously
+        // 1. Attempt to fetch fresh data from the server
         const [catalogRes, stockRes] = await Promise.all([
-          api.get('/inventory/catalog'),            // "What do we sell?"
-          api.get(`/inventory/levels/${branchId}/`)  // "How much is here?"
+          api.get('/inventory/catalog/'),
+          api.get(`/inventory/levels/${branchId}/`)
         ]);
 
-        const catalog: CatalogItem[] = catalogRes.data;
-        const stockList: StockItem[] = stockRes.data;
+        // 2. Merge logic
+        const catalogItems: CatalogItem[] = catalogRes.data;
+        const stockItems: StockItem[] = stockRes.data;
 
-        // 2. Create a Stock Map for fast lookup (O(1))
-        // Map: { [product_id]: quantity }
-        const stockMap = new Map<number, number>();
-        stockList.forEach(item => {
-          stockMap.set(item.id, item.total_quantity);
+        const mergedProducts: Product[] = catalogItems.map(catalogItem => {
+          const matchingStock = stockItems.find(s => s.id === catalogItem.id);
+          return {
+            ...catalogItem,
+            available_qty: matchingStock ? matchingStock.total_quantity : 0
+          };
         });
 
-        // 3. Merge Lists
-        // We map through the CATALOG (primary source of truth for items)
-        // and attach the quantity from the Stock Map.
-        const mergedProducts: Product[] = catalog.map(item => ({
-          ...item,
-          // Default to 0 if this branch has no record of this item in stock
-          available_qty: stockMap.get(item.id) || 0 
-        }));
-
+        // 3. Update UI and reset offline flag
         setProducts(mergedProducts);
+        setIsOfflineMode(false);
 
-      } catch (err) {
-        console.error("Failed to load product grid data", err);
+        // 4. Save the fresh merged data to IndexedDB for future offline use
+        try {
+            await saveProductsLocally(mergedProducts);
+        } catch (dbErr) {
+            console.error("Failed to cache products to IndexedDB:", dbErr);
+        }
+
+      } catch (err: any) {
+        console.error("Network request failed, falling back to local DB...", err);
+        
+        // --- OFFLINE FALLBACK LOGIC ---
+        try {
+            const localData = await getLocalProducts();
+            if (localData && localData.length > 0) {
+                setProducts(localData);
+                setIsOfflineMode(true); // Trigger the offline UI banner
+            } else {
+                console.error("No local data found. System cannot operate offline yet.");
+            }
+        } catch (fallbackErr) {
+            console.error("Failed to retrieve from local DB:", fallbackErr);
+        }
+
       } finally {
         setIsLoading(false);
       }
@@ -77,58 +98,63 @@ const ProductGrid: React.FC = () => {
     loadData();
   }, [branchId]);
 
-  // Filter Logic (Client-side)
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     p.sku.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAddToCart = (product: Product) => {
-    if (product.available_qty <= 0) {
-        alert("Item is out of stock!");
-        return;
-    }
-    
-    dispatch(addToCart({
-      id: product.id,
-      name: product.name,
-      price: Number(product.selling_price),
-      sku: product.sku
-    }));
-  };
-
-  if (isLoading) return <div className="p-10 text-center text-gray-500">Loading Catalog & Stock...</div>;
-  if (!branchId) return <div className="p-10 text-center text-red-500">Session Error: Please relogin.</div>;
-
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex-1 flex flex-col p-4 bg-gray-50 overflow-hidden relative">
+      
+      {/* OFFLINE MODE BANNER */}
+      {isOfflineMode && (
+          <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-3 mb-4 rounded shadow-sm flex items-center justify-between animate-fade-in">
+              <div className="flex items-center gap-2">
+                  <span className="text-xl">⚠️</span>
+                  <div>
+                      <p className="font-bold text-sm">Offline Mode Active</p>
+                      <p className="text-xs">You are disconnected. Browsing catalog from local storage.</p>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Search Bar */}
-      <div className="p-4 bg-white shadow-sm z-10 sticky top-0">
-        <div className="relative">
-            <span className="absolute left-3 top-3 text-gray-400">🔍</span>
-            <input 
-              type="text" 
-              placeholder="Search items by Name or SKU..." 
-              className="w-full p-3 pl-10 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-lg"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              autoFocus
-            />
-        </div>
+      <div className="mb-4">
+        <input 
+          type="text" 
+          placeholder="Search products by name or SKU..." 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 pl-4 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-shadow font-medium"
+        />
       </div>
 
-      {/* Grid */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {filteredProducts.length === 0 ? (
-           <div className="text-center text-gray-400 mt-10">No products found.</div>
-        ) : (
+      {/* Loading State */}
+      {isLoading ? (
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+           Syncing Catalog...
+        </div>
+      ) : (
+        /* Product Grid */
+        <div className="flex-1 overflow-y-auto pr-2 pb-20">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map(product => (
               <button 
-                key={product.id} 
-                onClick={() => handleAddToCart(product)}
+                key={product.id}
+                onClick={() => {
+                  if (product.available_qty > 0) {
+                      dispatch(addToCart({
+                          product_id: product.id,
+                          product_name: product.name,
+                          price: Number(product.selling_price),
+                          quantity: 1
+                      }));
+                  }
+                }}
                 disabled={product.available_qty <= 0}
-                className={`flex flex-col text-left p-4 rounded-xl shadow-sm border transition-all active:scale-95 ${
+                className={`p-4 rounded-xl flex flex-col text-left transition-all duration-200 border ${
                   product.available_qty > 0 
                     ? 'bg-white border-gray-200 hover:border-blue-500 hover:shadow-md' 
                     : 'bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed'
@@ -156,8 +182,14 @@ const ProductGrid: React.FC = () => {
               </button>
             ))}
           </div>
-        )}
-      </div>
+          
+          {filteredProducts.length === 0 && !isLoading && (
+            <div className="text-center text-gray-500 mt-10 p-8 bg-white rounded-xl border border-dashed border-gray-300">
+                No products found matching "{searchTerm}"
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

@@ -93,7 +93,7 @@ class StaffCreationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'password', 'role', 'branch_id', 'first_name', 'last_name']
+        fields = ['id', 'email', 'password', 'role', 'branch_id', 'first_name', 'last_name', 'branch']
 
     def validate_branch_id(self, value):
         user = self.context['request'].user

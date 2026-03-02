@@ -7,6 +7,8 @@ from inventory.models import Product, InventoryBatch
 from sales.models import SalesOrder, SaleItem, Payment, Customer, CustomerLedger
 import random
 import string
+from .models import ShiftReport
+from .selectors import get_current_shift_data
 
 
 
@@ -22,7 +24,8 @@ def create_sale_service(
     branch_id: str,
     customer_id: str = None,
     items: list[dict],
-    payments: list[dict]
+    payments: list[dict],
+    discount_amount: Decimal = Decimal('0.00')
 ) -> SalesOrder:
     """
     Core transactional logic for processing a sale.
@@ -43,6 +46,11 @@ def create_sale_service(
         customer = Customer.objects.filter(id=customer_id, tenant=user.tenant).first()
         if not customer:
             raise ValidationError("Invalid customer.")
+        
+    # Convert discount to Decimal to ensure accurate math
+    discount_amount = Decimal(str(discount_amount))
+    if discount_amount < 0:
+        raise ValidationError("Discount cannot be negative.")
 
     # 2. Begin Atomic Transaction (All or Nothing)
     with transaction.atomic():
@@ -54,6 +62,7 @@ def create_sale_service(
             user=user,
             total_amount=Decimal('0.00'),
             amount_paid=Decimal('0.00'),
+            discount_amount=discount_amount,
             payment_status=SalesOrder.PaymentStatus.PENDING,
             customer_snapshot={
                 "name": customer.name if customer else "Walk-in",
@@ -62,6 +71,7 @@ def create_sale_service(
         )
 
         total_order_amount = Decimal('0.00')
+        calculated_subtotal= Decimal('0.00')
 
         # 3. Process Items & Deduct Stock (The FIFO Logic)
         for item_data in items:
@@ -113,6 +123,7 @@ def create_sale_service(
                 # Create SaleItem linked to this SPECIFIC batch
                 # We snapshot cost_price here to know exactly how much profit we made later
                 subtotal = take_qty * product.selling_price
+                calculated_subtotal += subtotal
                 
                 SaleItem.objects.create(
                     order=order,
@@ -130,6 +141,14 @@ def create_sale_service(
             if qty_needed > 0:
                 raise ValidationError(f"Insufficient stock for {product.name}. Shortage: {qty_needed}")
 
+        if discount_amount > calculated_subtotal:
+            raise ValidationError("Discount amount cannot be greater than the subtotal.")
+        
+        # Calculate the final amount the customer actually needs to pay
+        final_total_amount = calculated_subtotal - discount_amount
+        
+        # ✅ Save the final total to the order shell so it persists in the database
+        order.total_amount = final_total_amount
         # 4. Process Multiple Payments
         total_paid = Decimal('0.00')
         
@@ -153,7 +172,7 @@ def create_sale_service(
 
         order.amount_paid = total_paid
 
-        # 5. Calculate Debt & Validate Credit Rules
+        # Calculate Debt & Validate Credit Rules
         debt_amount = total_order_amount - total_paid
 
         # Validation: Walk-in customers MUST pay in full
@@ -164,9 +183,8 @@ def create_sale_service(
 
         # Validation: Overpayment (Optional - prevent negative debt)
         if debt_amount < 0:
-             raise ValidationError(
-                f"Overpayment detected. Change due: {abs(debt_amount)}"
-            )
+             debt_amount = Decimal('0.00')
+            
 
         # 6. Handle Debt (Credit Sale)
         if debt_amount > 0:
@@ -299,3 +317,39 @@ def pay_customer_debt_service(
         )
 
         return ledger
+    
+
+
+
+def close_shift_service(*, user, shift_id, declared_cash, expected_cash, variance, notes=""):
+    try:
+        shift = ShiftReport.objects.get(
+            shift_code=shift_id, 
+            tenant=user.tenant, 
+            cashier=user, 
+            status=ShiftReport.Status.OPEN
+        )
+    except ShiftReport.DoesNotExist:
+        raise ValidationError("Open shift not found or already closed.")
+
+    # Get the final verified system totals (Prevents frontend manipulation)
+    shift_data = get_current_shift_data(user=user)
+
+    # Save the snapshots and close
+    shift.order_count = shift_data['order_count']
+    shift.expected_cash = shift_data['expected_cash']
+    shift.expected_pos = shift_data['expected_pos']
+    shift.expected_transfer = shift_data['expected_transfer']
+    shift.total_revenue = shift_data['total_revenue']
+    
+    # Save Cashier declared data
+    shift.declared_cash = declared_cash
+    shift.variance = variance
+    shift.notes = notes
+
+    # Close shift
+    shift.end_time = timezone.now()
+    shift.status = ShiftReport.Status.CLOSED
+    shift.save()
+
+    return shift

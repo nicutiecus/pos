@@ -1,5 +1,6 @@
-from .models import SalesOrder, CustomerLedger
+from .models import SalesOrder, CustomerLedger, ShiftReport, SalesOrder
 from django.shortcuts import get_object_or_404
+from django.db.models import Sum, Count, Q
 
 def get_sales_list(*, user, branch_id=None):
     """
@@ -50,3 +51,41 @@ def get_customer_ledger(*, user, customer_id: str):
         tenant=user.tenant, 
         customer_id=customer_id
     ).order_by('-created_at')
+
+def get_current_shift_data(*, user):
+    # 1. Find the Open Shift (ShiftReport uses 'cashier')
+    shift, created = ShiftReport.objects.get_or_create(
+        tenant=user.tenant,
+        cashier=user, # ✅ REVERTED back to 'cashier' for ShiftReport
+        status=ShiftReport.Status.OPEN,
+        defaults={'branch_id': user.branch_id}
+    )
+
+    # 2. Aggregate Sales (SalesOrder uses 'user')
+    sales_qs = SalesOrder.objects.filter(
+        tenant=user.tenant,
+        user=user,    # ✅ KEPT as 'user' for SalesOrder
+        created_at__gte=shift.start_time
+    )
+
+    # 3. Calculate totals using Django's database aggregation
+    # Note: We use 'payments__method' to look into the related Payment model
+    aggregates = sales_qs.aggregate(
+        order_count=Count('id'),
+        expected_cash=Sum('total_amount', filter=Q(payments__method='Cash')),
+        expected_pos=Sum('total_amount', filter=Q(payments__method='POS')),
+        expected_transfer=Sum('total_amount', filter=Q(payments__method='Transfer')),
+        total_revenue=Sum('total_amount')
+    )
+
+    # 4. Return the exact JSON dictionary your frontend requested
+    return {
+        "shift_id": shift.shift_code,
+        "start_time": shift.start_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "cashier_name": user.get_full_name() or user.email,
+        "order_count": aggregates['order_count'] or 0,
+        "expected_cash": aggregates['expected_cash'] or 0.00,
+        "expected_pos": aggregates['expected_pos'] or 0.00,
+        "expected_transfer": aggregates['expected_transfer'] or 0.00,
+        "total_revenue": aggregates['total_revenue'] or 0.00
+    }

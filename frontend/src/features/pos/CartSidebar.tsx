@@ -7,11 +7,22 @@ const CartSidebar: React.FC = () => {
   const dispatch = useAppDispatch();
   const { items, totalAmount } = useAppSelector((state) => state.cart);
   const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
+  // --- New Discount State ---
+  const [discount, setDiscount] = useState<number | ''>('');
 
   // Helper to re-add item (increase qty)
   const increaseQty = (item: any) => {
     dispatch(addToCart({ ...item })); // Re-dispatching adds 1
   };
+
+  const handleClearCart = () => {
+      dispatch(clearCart());
+      setDiscount(''); // Reset discount when cart is cleared
+  };
+  // --- Calculate Final Total ---
+  const safeDiscount = Number(discount) || 0;
+  // Ensure the discount doesn't make the total negative
+  const finalTotal = Math.max(0, totalAmount - safeDiscount);
 
   return (
     <>
@@ -23,7 +34,7 @@ const CartSidebar: React.FC = () => {
             <h2 className="text-xl font-bold">Current Order</h2>
             <p className="text-xs text-gray-400">Order #{Date.now().toString().slice(-6)}</p>
           </div>
-          <button onClick={() => dispatch(clearCart())} className="text-xs text-red-300 hover:text-white underline">
+          <button onClick={handleClearCart} className="text-xs text-red-300 hover:text-white underline">
             Clear
           </button>
         </div>
@@ -61,11 +72,29 @@ const CartSidebar: React.FC = () => {
               <span>Subtotal</span>
               <span>₦{totalAmount.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-xl font-extrabold text-gray-900">
+            
+          
+          {/* --- NEW DISCOUNT INPUT --- */}
+            <div className="flex justify-between items-center text-gray-600 text-sm border-b border-gray-100 pb-3">
+              <span className="font-medium">Discount (₦)</span>
+              <input 
+                type="number" 
+                min="0"
+                max={totalAmount}
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="0"
+                className="w-24 text-right p-1.5 border border-gray-300 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow"
+              />
+            </div>
+
+            <div className="flex justify-between text-xl font-extrabold text-gray-900 pt-1">
               <span>Total</span>
-              <span>₦{totalAmount.toLocaleString()}</span>
+              <span>₦{finalTotal.toLocaleString()}</span>
             </div>
           </div>
+
+          
           
           <button 
             disabled={items.length === 0}

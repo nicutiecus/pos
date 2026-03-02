@@ -33,6 +33,102 @@ interface NewProductPayload {
   attributesStr: string; // We use a string input for the JSON attributes
 }
 
+// --- Inline Editable Price Component ---
+interface EditablePriceCellProps {
+  productId: number;
+  initialPrice: string | number;
+  onSuccess: (newPrice: string) => void;
+}
+
+const EditablePriceCell: React.FC<EditablePriceCellProps> = ({ productId, initialPrice, onSuccess }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [price, setPrice] = useState<string>(String(initialPrice));
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    const numericPrice = Number(price);
+    
+    if (isNaN(numericPrice) || numericPrice < 0) {
+      alert("Please enter a valid price.");
+      return;
+    }
+    
+    if (numericPrice === Number(initialPrice)) {
+      setIsEditing(false);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await api.patch(`/inventory/products/${productId}/price/`, {
+        new_price: numericPrice
+      });
+      
+      onSuccess(String(numericPrice));
+      setIsEditing(false);
+    } catch (err: any) {
+      alert(`Failed to update price: ${err.response?.data?.message || err.message}`);
+      setPrice(String(initialPrice));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') {
+      setPrice(String(initialPrice));
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <span className="text-gray-500 font-bold text-xs">₦</span>
+        <input
+          type="number"
+          min="0"
+          autoFocus
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="w-20 p-1 border border-blue-500 rounded outline-none text-xs font-bold"
+          disabled={isSaving}
+        />
+        {isSaving ? (
+          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+        ) : (
+          <>
+            <button onClick={handleSave} className="text-green-600 hover:text-green-800 p-1" title="Save (Enter)">
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+            </button>
+            <button onClick={() => { setIsEditing(false); setPrice(String(initialPrice)); }} className="text-red-500 hover:text-red-700 p-1" title="Cancel (Esc)">
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="flex items-center gap-2 mt-1 group cursor-pointer hover:bg-gray-100 p-1 -ml-1 rounded transition-colors" 
+      onClick={() => setIsEditing(true)}
+      title="Click to edit selling price"
+    >
+      <div className="font-bold">
+        <span className="text-gray-500 text-xs font-normal">Sell:</span> ₦{Number(initialPrice).toLocaleString()}
+      </div>
+      <button className="text-gray-300 group-hover:text-blue-500 transition-colors">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+      </button>
+    </div>
+  );
+};
+
+// --- Main Component ---
 const ProductList: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -130,7 +226,7 @@ const ProductList: React.FC = () => {
       
       // Reset Form
       setNewProduct({ 
-        name: '', sku: '', category_id: '', 
+        name: '', sku: '', category_id: 1, 
         cost_price: '', selling_price: '', 
         unit_type: 'Unit', has_sub_unit: false, 
         sub_unit_ratio: '1.00', attributesStr: '' 
@@ -267,39 +363,57 @@ const ProductList: React.FC = () => {
 
       {/* --- LIST TABLE --- */}
       <div className="bg-white border border-gray-200 rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-                <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prices</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Config</th>
-                </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-                {products.map(p => (
-                    <tr key={p.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{p.sku}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div><span className="text-gray-500 text-xs">Cost:</span> ₦{p.cost_price}</div>
-                            <div className="font-bold"><span className="text-gray-500 text-xs font-normal">Sell:</span> ₦{p.selling_price}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                           {p.has_sub_unit ? (
-                               <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                                   Has Sub-Units (1:{p.sub_unit_ratio})
-                               </span>
-                           ) : (
-                               <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
-                                   Simple {p.unit_type}
-                               </span>
-                           )}
-                        </td>
+        {isLoading ? (
+            <div className="p-10 text-center text-gray-500">Loading catalog...</div>
+        ) : (
+            <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                    <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prices</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Config</th>
                     </tr>
-                ))}
-            </tbody>
-        </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                    {products.map(p => (
+                        <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{p.sku}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div><span className="text-gray-500 text-xs">Cost:</span> ₦{Number(p.cost_price).toLocaleString()}</div>
+                                
+                                {/* --- INLINE EDITABLE PRICE COMPONENT --- */}
+                                <EditablePriceCell 
+                                  productId={p.id} 
+                                  initialPrice={p.selling_price} 
+                                  onSuccess={(newPrice) => {
+                                    // Update the specific product in the table seamlessly
+                                    setProducts(prevProducts => 
+                                      prevProducts.map(prod => 
+                                        prod.id === p.id ? { ...prod, selling_price: newPrice } : prod
+                                      )
+                                    );
+                                  }} 
+                                />
+
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                               {p.has_sub_unit ? (
+                                   <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                       Has Sub-Units (1:{p.sub_unit_ratio})
+                                   </span>
+                               ) : (
+                                   <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
+                                       Simple {p.unit_type}
+                                   </span>
+                               )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        )}
       </div>
     </div>
   );

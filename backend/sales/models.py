@@ -2,7 +2,10 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
-from common.models import TenantAwareModel
+from common.models import TenantAwareModel, Branch
+from django.utils import timezone
+
+
 
 class Customer(TenantAwareModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -53,7 +56,7 @@ class SalesOrder(TenantAwareModel):
     branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING)
@@ -92,3 +95,49 @@ class Payment(TenantAwareModel):
 
     class Meta:
         db_table = 'payments'
+
+
+
+
+class ShiftReport(TenantAwareModel):
+    class Status(models.TextChoices):
+        OPEN = 'Open', 'Open'
+        CLOSED = 'Closed', 'Closed'
+
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='shifts')
+    cashier = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shifts')
+    start_time = models.DateTimeField(auto_now_add=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+
+    # Totals at the time of closing (Calculated by System)
+    order_count = models.IntegerField(default=0)
+    expected_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    expected_pos = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    expected_transfer = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # Cashier declared values (Entered manually)
+    declared_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0, null=True, blank=True)
+    variance = models.DecimalField(max_digits=12, decimal_places=2, default=0, null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+    shift_code = models.CharField(max_length=100, unique=True, blank= True)
+
+    def save(self, *args, **kwargs):
+        if not self.shift_code:
+            # Format: YYYYMMDD-HHMM (e.g., 20260302-0930)
+            timestamp = timezone.now().strftime("%Y%m%d-%H%M")
+            
+            # Get the cashier's name or email prefix (e.g. 'johndoe')
+            identifier = self.cashier.get_full_name().replace(" ", "").lower()
+            if not identifier:
+                identifier = self.cashier.email.split('@')[0].lower()
+                
+            # Combine them: johndoe-20260302-0930
+            self.shift_code = f"{identifier}-{timestamp}"
+            
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Shift {self.id} - {self.cashier.email} ({self.status})"
+    

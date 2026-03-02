@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import api from '../../api/axiosInstance';
 import { useReactToPrint } from 'react-to-print';
 import { ReceiptTemplate, type ReceiptData } from './ReceiptTemplate';
+import { formatBackendDate } from '../../utils/dateFormatter';
 
 // --- Types ---
 
@@ -9,7 +10,7 @@ import { ReceiptTemplate, type ReceiptData } from './ReceiptTemplate';
 interface SaleSummary {
   id: string; // Changed to string to match UUIDs usually
   receipt_number: string;
-  created_at: string; // or formatted_date
+  formatted_date: string; // or formatted_date
   total_amount: string;
   payment_method: string; // or payment_status
   // Items might be missing in summary, so we make it optional
@@ -160,7 +161,7 @@ const SalesHistory: React.FC = () => {
                       {sale.receipt_number || sale.id.slice(0,8)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatBackendDate(sale.formatted_date, { hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium border ${

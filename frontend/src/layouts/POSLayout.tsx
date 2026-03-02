@@ -1,36 +1,36 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { useAppDispatch } from '../store/hooks'; // 1. Import Hook
-import { clearCart } from '../store/slices/cartSlice'; // 2. Import Action
+import { useAppDispatch } from '../store/hooks'; 
+import { clearCart } from '../store/slices/cartSlice'; 
+import ShiftClosing from '../features/pos/ShiftClosing'; // Adjust this import path if needed!
 
 const POSLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useAppDispatch(); // 3. Initialize Dispatch
+  const dispatch = useAppDispatch(); 
   const branchName = localStorage.getItem('branchName') || 'Branch';
   const cashierName = localStorage.getItem('userName') || 'Cashier';
 
-  const handleLogout = () => {
-    if(window.confirm("End Shift and Logout?")) {
-      localStorage.clear();
-      navigate('/login');
-    }
+  // --- New State for Shift Closing Overlay ---
+  const [isClosingShift, setIsClosingShift] = useState(false);
+
+  // This is the actual logout logic that runs AFTER the Z-Report is printed
+  const handleActualLogout = () => {
+    localStorage.clear();
+    navigate('/login');
   };
 
-  // 4. Create a "New Sale" Handler
   const handleNewSale = (e: React.MouseEvent) => {
-    // If we are already on the POS page, clicking this should act as a "Reset"
     if (location.pathname === '/pos') {
-      e.preventDefault(); // Stop navigation (since we are already here)
+      e.preventDefault(); 
       if (window.confirm("Clear current cart and start a new sale?")) {
         dispatch(clearCart());
       }
     }
-    // If we are on History page, the <NavLink> will handle the navigation automatically
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 overflow-hidden">
+    <div className="flex flex-col h-screen bg-gray-100 overflow-hidden relative">
       {/* Top Navbar */}
       <header className="bg-blue-800 text-white shadow-md flex-shrink-0 z-20">
         <div className="flex justify-between items-center px-4 py-2">
@@ -43,7 +43,7 @@ const POSLayout: React.FC = () => {
               <NavLink 
                 to="/pos" 
                 end
-                onClick={handleNewSale} // 5. Attach Handler
+                onClick={handleNewSale} 
                 className={({ isActive }) => 
                   `px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-white text-blue-900 shadow-sm' : 'text-blue-200 hover:text-white'}`
                 }
@@ -66,7 +66,11 @@ const POSLayout: React.FC = () => {
                 <div className="text-xs text-blue-300">Logged in as</div>
                 <div className="text-sm font-bold">{cashierName} ({branchName})</div>
              </div>
-             <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors">
+             {/* Intercept the click to open the modal instead of logging out instantly */}
+             <button 
+                onClick={() => setIsClosingShift(true)} 
+                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors"
+             >
                End Shift
              </button>
           </div>
@@ -77,6 +81,16 @@ const POSLayout: React.FC = () => {
       <main className="flex-1 overflow-hidden relative">
         <Outlet />
       </main>
+
+      {/* --- FULL SCREEN SHIFT CLOSING OVERLAY --- */}
+      {isClosingShift && (
+        <div className="absolute inset-0 z-50 bg-gray-100 overflow-y-auto">
+          <ShiftClosing 
+              onCancel={() => setIsClosingShift(false)} 
+              onLogout={handleActualLogout} 
+          />
+        </div>
+      )}
     </div>
   );
 };

@@ -2,12 +2,12 @@ from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
-from .selectors import get_sales_list, get_sale_detail, get_customer_ledger
+from .selectors import get_sales_list, get_sale_detail, get_customer_ledger, get_current_shift_data
 from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer, 
-                          CreateSaleSerializer, PayDebtSerializer, CustomerLedgerSerializer)
+                          CreateSaleSerializer, PayDebtSerializer, CustomerLedgerSerializer,
+                          CloseShiftSerializer)
 
-from .services import create_sale_service, pay_customer_debt_service
-from .serializers import PayDebtSerializer
+from .services import create_sale_service, pay_customer_debt_service, close_shift_service
 
 
 
@@ -107,3 +107,30 @@ class PayDebtApi(views.APIView):
 
         except ValidationError as e:
             return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+class CurrentShiftApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        shift_data = get_current_shift_data(user=request.user)
+        return Response(shift_data, status=status.HTTP_200_OK)
+
+class CloseShiftApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CloseShiftSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            close_shift_service(
+                user=request.user,
+                **serializer.validated_data
+            )
+            return Response({"message": "Shift closed successfully."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -1,6 +1,6 @@
 from django.db.models import Sum, F, Q
 from django.utils import timezone
-from .models import InventoryBatch, Product, Category, StockTransferLog
+from .models import InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory
 from django.utils import timezone
 from django.core.exceptions import PermissionDenied
 
@@ -145,3 +145,11 @@ def get_stock_transfer_logs(*, user, status=None, direction=None, branch_id=None
 
     return qs.order_by('-created_at')
 
+
+
+def get_product_price_history(*, user, product_id: str):
+    """Fetches the price history for a specific product securely."""
+    return ProductPriceHistory.objects.filter(
+        tenant=user.tenant,
+        product_id=product_id
+    ).select_related('changed_by').order_by('-created_at')

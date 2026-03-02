@@ -2,16 +2,20 @@ from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
-                           CategorySerializer, InventoryLogSerializer, 
-                           StockTransferSerializer, StockTransferLogSerializer)
+                           CategorySerializer, InventoryLogSerializer, UpdateProductPriceSerializer,
+                           StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer)
 from .services import (receive_stock_service, create_product_service, 
-                       create_category_service, accept_transfer_service, initiate_transfer_service)
+                       create_category_service, accept_transfer_service, initiate_transfer_service,
+                       reject_transfer_service, update_product_price_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
+                        get_product_price_history
                         )
 from django.core.exceptions import PermissionDenied, ValidationError
-from .serializers import StockTransferLogSerializer
 from .models import StockTransferLog
+
+
+
 
 class StockReceiveApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -207,3 +211,73 @@ class AcceptTransferApi(views.APIView):
             return Response({"error": "Transfer record not found."}, status=status.HTTP_404_NOT_FOUND)
         except ValidationError as e:
             return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+
+class RejectTransferApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, transfer_id):
+        # We can just read the reason directly from request.data
+        reason = request.data.get('reason', '')
+
+        try:
+            transfer = reject_transfer_service(
+                user=request.user, 
+                transfer_id=transfer_id,
+                reason=reason
+            )
+            return Response({
+                "message": "Stock transfer rejected. Inventory returned to source branch.",
+                "status": transfer.status,
+                "notes": transfer.notes
+            }, status=status.HTTP_200_OK)
+            
+        except StockTransferLog.DoesNotExist:
+            return Response({"error": "Transfer record not found."}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+class UpdateProductPriceApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, product_id):
+        # 🔒 Strict Security: Only Admins or Managers can change prices
+        if request.user.role not in ['Admin','Tenant_Admin', 'Super_Admin', 'Manager']:
+            return Response(
+                {"error": "You do not have permission to change product prices."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = UpdateProductPriceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            product = update_product_price_service(
+                user=request.user,
+                product_id=product_id,
+                new_price=serializer.validated_data['new_price']
+            )
+
+            return Response({
+                "message": "Price updated successfully.",
+                "product_id": product.id,
+                "new_price": product.selling_price
+            }, status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+class ProductPriceHistoryApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, product_id):
+        history_qs = get_product_price_history(user=request.user, product_id=product_id)
+        serializer = ProductPriceHistorySerializer(history_qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

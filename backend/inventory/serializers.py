@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Product, Category, InventoryBatch, StockTransferLog
+from .models import Product, Category, InventoryBatch, StockTransferLog, ProductPriceHistory
+
 
 class StockReceiveItemSerializer(serializers.Serializer):
     product_id = serializers.UUIDField()
@@ -113,3 +114,17 @@ class StockTransferLogSerializer(serializers.ModelSerializer):
             'id', 'product_name', 'source_branch_name', 'destination_branch_name',
             'quantity', 'transferred_by_email', 'notes', 'formatted_date', 'status'
         ]
+
+
+
+class UpdateProductPriceSerializer(serializers.Serializer):
+    new_price = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
+
+
+
+class ProductPriceHistorySerializer(serializers.ModelSerializer):
+    changed_by_name = serializers.CharField(source='changed_by.get_full_name', read_only=True, default="System")
+
+    class Meta:
+        model = ProductPriceHistory
+        fields = ['id', 'old_price', 'new_price', 'changed_by_name', 'created_at']

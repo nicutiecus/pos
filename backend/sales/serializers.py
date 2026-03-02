@@ -25,6 +25,12 @@ class CreateSaleSerializer(serializers.Serializer):
     customer_id = serializers.UUIDField(required=False, allow_null=True)
     items = SaleItemSerializer(many=True)
     payments = serializers.ListField(child=PaymentSerializer(), required=False) # Optional (e.g. Credit Sale)
+    discount_amount = serializers.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00, 
+        min_value=0.00 # Prevent negative discounts
+    )
 
 class PaymentDetailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,7 +66,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'branch_name', 'cashier_name', 'customer_name', 
             'total_amount', 'amount_paid', 'payment_status', 
-            'formatted_date', 'items', 'payments', 'customer_snapshot'
+            'formatted_date', 'items', 'payments', 'customer_snapshot','discount_amount'
         ]
 
 
@@ -79,7 +85,7 @@ class PayDebtSerializer(serializers.Serializer):
     method = serializers.CharField(max_length=50) # Cash, Transfer, etc.
     notes = serializers.CharField(required=False, allow_blank=True)
 
-# 3. Ledger History Serializer
+# Ledger History Serializer
 class CustomerLedgerSerializer(serializers.ModelSerializer):
     formatted_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
     
@@ -89,3 +95,10 @@ class CustomerLedgerSerializer(serializers.ModelSerializer):
             'id', 'transaction_type', 'amount', 
             'balance_after', 'reference_id', 'notes', 'formatted_date', 'created_at'
         ]
+
+class CloseShiftSerializer(serializers.Serializer):
+    shift_id = serializers.CharField()
+    declared_cash = serializers.DecimalField(max_digits=12, decimal_places=2)
+    expected_cash = serializers.DecimalField(max_digits=12, decimal_places=2)
+    variance = serializers.DecimalField(max_digits=12, decimal_places=2)
+    notes = serializers.CharField(required=False, allow_blank=True)

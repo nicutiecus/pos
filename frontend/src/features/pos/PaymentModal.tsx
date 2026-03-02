@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { clearCart } from '../../store/slices/cartSlice';
 import api from '../../api/axiosInstance';
+// --- IMPORT OFFLINE DB UTILITY ---
+import { saveOfflineOrder } from '../../utils/offlineDB';
 
 // --- Types ---
 interface Props {
   total: number;
+  discountAmount?: number;
   onClose: () => void;
 }
 
@@ -23,7 +26,7 @@ interface PaymentLine {
   reference?: string;
 }
 
-const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
+const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(state => state.cart.items);
 
@@ -39,301 +42,317 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '' });
   
   // Payments
-  const [payments, setPayments] = useState<PaymentLine[]>([]);
-  const [currentMethod, setCurrentMethod] = useState<'Cash' | 'Transfer' | 'POS'>('Cash'); 
-  const [currentAmount, setCurrentAmount] = useState<string>('');
-
-  const branchId = localStorage.getItem('branchId');
+  const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([{ method: 'Cash', amount: total }]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCreditSale, setIsCreditSale] = useState(false);
 
   // --- Calculations ---
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const totalPaid = paymentLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
   const balance = total - totalPaid;
-  const isCreditSale = balance > 0;
 
-  // --- Load Customers ---
+  // --- Fetch Customers ---
   useEffect(() => {
-    if (customerSearch.length > 2 && !isCreatingCustomer) {
-      const search = async () => {
-        try {
-          const res = await api.get(`/sales/customers?search=${customerSearch}`);
-          setCustomers(res.data);
-        } catch (err) {
-            console.error("Customer search failed", err);
-        }
-      };
-      const timeoutId = setTimeout(search, 500); 
-      return () => clearTimeout(timeoutId);
-    }
-  }, [customerSearch, isCreatingCustomer]);
+    const fetchCustomers = async () => {
+      try {
+        const branchId = localStorage.getItem('branchId');
+        const res = await api.get(`/sales/customers/?branch_id=${branchId}`);
+        setCustomers(res.data);
+      } catch (err) {
+        console.error("Failed to load customers", err);
+      }
+    };
+    fetchCustomers();
+  }, []);
 
   // --- Handlers ---
+  const handleAddPaymentLine = () => {
+    if (balance > 0) {
+      setPaymentLines([...paymentLines, { method: 'Transfer', amount: balance }]);
+    } else {
+      setPaymentLines([...paymentLines, { method: 'Transfer', amount: 0 }]);
+    }
+  };
+
+  const handleRemovePaymentLine = (index: number) => {
+    const newLines = paymentLines.filter((_, i) => i !== index);
+    setPaymentLines(newLines);
+  };
+
+  const handleUpdatePaymentLine = (index: number, field: keyof PaymentLine, value: any) => {
+    const newLines = [...paymentLines];
+    newLines[index] = { ...newLines[index], [field]: value };
+    setPaymentLines(newLines);
+  };
+
+  // --- New Customer Handlers ---
   const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingCustomer(true);
     try {
-      // Adjust endpoint if your backend uses something else (e.g. /customers/create/)
-      const res = await api.post('/sales/customers/', newCustomerForm);
-      
-      // Auto-select the newly created customer
-      setSelectedCustomer({
-          id: res.data.id,
-          name: res.data.name,
-          phone: res.data.phone,
-          credit_limit: res.data.credit_limit || 0,
-          current_debt: res.data.current_debt || 0
-      });
-      
-      setIsCreatingCustomer(false);
-      setNewCustomerForm({ name: '', phone: '' }); // Reset form
+        const branchId = localStorage.getItem('branchId');
+        const payload = {
+            ...newCustomerForm,
+            branch_id: branchId
+        };
+        const res = await api.post('/sales/customers/', payload);
+        
+        const createdCustomer = res.data;
+        setCustomers(prev => [...prev, createdCustomer]);
+        setSelectedCustomer(createdCustomer);
+        setIsCreatingCustomer(false);
+        setNewCustomerForm({ name: '', phone: '' });
+        
     } catch (err: any) {
-      alert(`Failed to create customer: ${err.response?.data?.message || err.message}`);
+        alert(`Failed to create customer: ${err.response?.data?.message || err.message}`);
     } finally {
-      setIsSubmittingCustomer(false);
+        setIsSubmittingCustomer(false);
     }
-  };
-
-  const addPaymentLine = () => {
-    const amount = Number(currentAmount);
-    if (!amount || amount <= 0) return;
-    
-    if (amount > balance && balance > 0) {
-        if(!window.confirm(`Amount (₦${amount}) exceeds remaining balance (₦${balance}). Add excess as Change?`)) return;
-    }
-
-    setPayments([...payments, { method: currentMethod, amount }]);
-    setCurrentAmount(''); 
-  };
-
-  const removePaymentLine = (index: number) => {
-    const newPayments = [...payments];
-    newPayments.splice(index, 1);
-    setPayments(newPayments);
   };
 
   const handleCheckout = async () => {
-    if (isCreditSale && !selectedCustomer) {
-      alert("⚠️ Credit sales require a registered customer.\nPlease select or create a customer.");
-      return;
+    if (balance > 0 && !isCreditSale) {
+        alert("Full payment is required unless it is a Credit Sale.");
+        return;
     }
 
-    if (isCreditSale && selectedCustomer) {
-        const newDebt = selectedCustomer.current_debt + balance;
-        if (newDebt > selectedCustomer.credit_limit) {
-            if (!window.confirm(`⚠️ Credit Limit Warning!\nNew Debt: ₦${newDebt.toLocaleString()}\nLimit: ₦${selectedCustomer.credit_limit.toLocaleString()}\nProceed anyway?`)) {
-                return;
-            }
-        }
+    if (isCreditSale && !selectedCustomer) {
+        alert("A customer must be selected for a Credit Sale.");
+        return;
+    }
+
+    if (isCreditSale && selectedCustomer && (selectedCustomer.current_debt + balance > selectedCustomer.credit_limit)) {
+        alert(`This credit sale exceeds ${selectedCustomer.name}'s credit limit of ₦${selectedCustomer.credit_limit.toLocaleString()}`);
+        return;
     }
 
     setIsProcessing(true);
-    try {
-      const payload = {
-        customer_id: selectedCustomer?.id || null, 
+
+    const payload = {
+        branch_id: localStorage.getItem('branchId'),
+        cashier_id: localStorage.getItem('userId'), // Adjust depending on your auth payload
+        customer_id: selectedCustomer?.id || null,
         total_amount: total,
-        amount_paid: totalPaid,
-        branch_id: branchId,
-        balance: isCreditSale ? balance : 0, 
-        status: isCreditSale ? 'PARTIAL' : 'PAID',
-        
-        payments: payments.map(p => ({
+        discount_amount: discountAmount,
+        is_credit: isCreditSale,
+        credit_balance: isCreditSale ? balance : 0,
+        payments: paymentLines.map(p => ({
             method: p.method,
-            amount: p.amount
+            amount: Number(p.amount)
         })),
-        
         items: cartItems.map(item => ({
-          product_id: item.id,
-          quantity: item.quantity,
-          unit_price: item.price
+            product_id: item.product_id,
+            quantity: item.quantity,
+            unit_price: item.price
         }))
-      };
+    };
 
-      await api.post('/sales/create/', payload);
-
-      alert(isCreditSale 
-        ? `Sale Recorded!\nCustomer ${selectedCustomer?.name} owes ₦${balance.toLocaleString()}` 
-        : `Sale Completed! ${balance < 0 ? `\nChange Due: ₦${Math.abs(balance).toLocaleString()}` : ''}`);
+    try {
+        const response = await api.post('/sales/create/', payload);
+        alert('Payment Successful!');
         
-      dispatch(clearCart());
-      onClose();
-      
+        // --- TODO: TRIGGER RECEIPT PRINTING HERE ---
+        // e.g. setReceiptData(response.data.receipt); printReceipt();
+        
+        dispatch(clearCart());
+        onClose();
+
     } catch (err: any) {
-      console.error(err);
-      alert(`Transaction Failed: ${err.response?.data?.message || err.message}`);
+        // --- OFFLINE FALLBACK INTERCEPTION ---
+        if (!navigator.onLine || err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+            console.warn("Network disconnected. Saving order to local IndexedDB...");
+            try {
+                // Save exactly what we would have sent to Django
+                await saveOfflineOrder(payload);
+                
+                alert("You are offline! Order has been saved locally and will sync when the internet returns.");
+                
+                dispatch(clearCart());
+                onClose();
+            } catch (dbErr) {
+                console.error("Failed to save offline order:", dbErr);
+                alert("Critical Error: Could not save order offline.");
+            }
+        } else {
+            // Normal server error (e.g. 400 Bad Request, Out of Stock)
+            alert(`Checkout failed: ${err.response?.data?.message || err.message}`);
+        }
     } finally {
-      setIsProcessing(false);
+        setIsProcessing(false);
     }
   };
 
+  const filteredCustomers = customers.filter(c => 
+    c.name.toLowerCase().includes(customerSearch.toLowerCase()) || 
+    c.phone.includes(customerSearch)
+  );
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4 overflow-y-auto">
+      <div className="bg-gray-50 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col my-auto border border-gray-200">
         
         {/* Header */}
-        <div className="bg-gray-50 p-6 border-b border-gray-200 flex justify-between items-center">
+        <div className="bg-white p-6 flex justify-between items-center border-b border-gray-200">
           <div>
-            <h3 className="text-lg font-bold text-gray-700">Checkout</h3>
-            <p className="text-sm text-gray-500">{cartItems.length} items</p>
+            <h3 className="font-extrabold text-2xl text-gray-900 tracking-tight">Checkout</h3>
+            <p className="text-sm text-gray-500 font-medium">Complete transaction and process payment.</p>
           </div>
-          <div className="text-right">
-            <div className="text-xs text-gray-500 uppercase">Total Due</div>
-            <div className="text-3xl font-extrabold text-gray-900">₦{total.toLocaleString()}</div>
-          </div>
+          <button onClick={onClose} className="bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        {/* Body Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-0">
           
-          {/* 1. CUSTOMER SELECTION / CREATION */}
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">Customer (Required for Credit)</label>
-            
-            {isCreatingCustomer ? (
-                // --- CREATE NEW CUSTOMER FORM ---
-                <form onSubmit={handleCreateCustomer} className="bg-blue-50 p-4 rounded-lg border border-blue-200 shadow-inner space-y-3 animate-fade-in-down">
-                    <div className="flex justify-between items-center border-b border-blue-100 pb-2">
-                        <span className="font-bold text-sm text-blue-900">Add New Customer</span>
-                        <button type="button" onClick={() => setIsCreatingCustomer(false)} className="text-gray-500 text-xs hover:text-red-500">Cancel</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <input 
-                            type="text" 
-                            placeholder="Full Name" 
-                            required 
-                            value={newCustomerForm.name} 
-                            onChange={e => setNewCustomerForm({...newCustomerForm, name: e.target.value})} 
-                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-400 outline-none text-sm" 
-                        />
-                        <input 
-                            type="tel" 
-                            placeholder="Phone Number" 
-                            required 
-                            value={newCustomerForm.phone} 
-                            onChange={e => setNewCustomerForm({...newCustomerForm, phone: e.target.value})} 
-                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-400 outline-none text-sm" 
-                        />
-                    </div>
-                    <button 
-                        type="submit" 
-                        disabled={isSubmittingCustomer || !newCustomerForm.name || !newCustomerForm.phone} 
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white p-2 rounded text-sm font-bold disabled:opacity-50 transition-colors"
-                    >
-                        {isSubmittingCustomer ? 'Saving...' : 'Save & Select Customer'}
-                    </button>
-                </form>
+          {/* LEFT: Customer Selection */}
+          <div className="lg:col-span-2 bg-white border-r border-gray-200 p-6 flex flex-col space-y-4">
+              <div className="flex justify-between items-center mb-2">
+                 <h4 className="font-bold text-gray-700 uppercase tracking-wider text-sm">Customer Info</h4>
+                 {selectedCustomer && (
+                     <button onClick={() => setSelectedCustomer(null)} className="text-xs text-red-500 hover:text-red-700 font-bold">Clear</button>
+                 )}
+              </div>
 
-            ) : selectedCustomer ? (
-                // --- SELECTED CUSTOMER CARD ---
-                <div className="flex justify-between items-center bg-blue-50 p-3 rounded border border-blue-200">
-                    <div>
-                        <div className="font-bold text-blue-900">{selectedCustomer.name}</div>
-                        <div className="text-xs text-blue-600">Current Debt: ₦{selectedCustomer.current_debt.toLocaleString()}</div>
-                    </div>
-                    <button onClick={() => setSelectedCustomer(null)} className="text-red-500 text-xs hover:underline font-medium px-2">Change</button>
-                </div>
-
-            ) : (
-                // --- SEARCH BAR ---
-                <div className="relative">
-                    <input 
-                        type="text" 
-                        placeholder="Search Name or Phone..." 
-                        className="w-full border rounded p-2 pl-8 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={customerSearch}
-                        onChange={(e) => setCustomerSearch(e.target.value)}
-                    />
-                    <span className="absolute left-2.5 top-2.5 text-gray-400">🔍</span>
-                    
-                    {/* Add New Customer Button */}
-                    <div className="mt-2 text-right">
-                        <button 
-                            type="button" 
-                            onClick={() => setIsCreatingCustomer(true)} 
-                            className="text-sm text-blue-600 hover:text-blue-800 font-bold"
-                        >
-                            + Add New Customer
-                        </button>
-                    </div>
-
-                    {/* Search Results Dropdown */}
-                    {customers.length > 0 && customerSearch.length > 2 && (
-                        <div className="absolute z-10 w-full bg-white border shadow-lg mt-1 rounded max-h-40 overflow-y-auto">
-                            {customers.map(c => (
-                                <button key={c.id} onClick={() => { setSelectedCustomer(c); setCustomers([]); setCustomerSearch(''); }}
-                                    className="w-full text-left p-2 hover:bg-gray-100 border-b text-sm">
-                                    <span className="font-bold text-gray-800">{c.name}</span> <span className="text-gray-500">({c.phone})</span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
+              {selectedCustomer ? (
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                      <div className="font-bold text-lg text-blue-900">{selectedCustomer.name}</div>
+                      <div className="text-sm text-blue-700 mb-3">{selectedCustomer.phone}</div>
+                      
+                      <div className="grid grid-cols-2 gap-2 text-sm bg-white p-3 rounded-lg border border-blue-100">
+                          <div>
+                              <div className="text-gray-500 text-xs">Current Debt</div>
+                              <div className={`font-bold ${selectedCustomer.current_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                  ₦{selectedCustomer.current_debt.toLocaleString()}
+                              </div>
+                          </div>
+                          <div>
+                              <div className="text-gray-500 text-xs">Credit Limit</div>
+                              <div className="font-bold text-gray-800">₦{selectedCustomer.credit_limit.toLocaleString()}</div>
+                          </div>
+                      </div>
+                  </div>
+              ) : isCreatingCustomer ? (
+                  <form onSubmit={handleCreateCustomer} className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-4">
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Full Name</label>
+                          <input required type="text" value={newCustomerForm.name} onChange={e => setNewCustomerForm({...newCustomerForm, name: e.target.value})} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Phone</label>
+                          <input required type="text" value={newCustomerForm.phone} onChange={e => setNewCustomerForm({...newCustomerForm, phone: e.target.value})} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                      </div>
+                      <div className="flex gap-2">
+                          <button type="button" onClick={() => setIsCreatingCustomer(false)} className="flex-1 py-2 bg-gray-200 text-gray-700 rounded font-bold text-sm">Cancel</button>
+                          <button type="submit" disabled={isSubmittingCustomer} className="flex-1 py-2 bg-blue-600 text-white rounded font-bold text-sm disabled:opacity-50">Save</button>
+                      </div>
+                  </form>
+              ) : (
+                  <>
+                      <input 
+                          type="text" 
+                          placeholder="Search existing customer..." 
+                          value={customerSearch}
+                          onChange={e => setCustomerSearch(e.target.value)}
+                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+                      />
+                      <div className="flex-1 overflow-y-auto max-h-[300px] border border-gray-100 rounded-lg">
+                          {filteredCustomers.map(c => (
+                              <button 
+                                  key={c.id} 
+                                  onClick={() => setSelectedCustomer(c)}
+                                  className="w-full text-left p-3 border-b border-gray-100 hover:bg-blue-50 transition-colors flex justify-between items-center"
+                              >
+                                  <div>
+                                      <div className="font-bold text-gray-800">{c.name}</div>
+                                      <div className="text-xs text-gray-500">{c.phone}</div>
+                                  </div>
+                                  <span className="text-blue-600">➔</span>
+                              </button>
+                          ))}
+                      </div>
+                      <button 
+                          onClick={() => setIsCreatingCustomer(true)}
+                          className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 font-bold hover:border-blue-500 hover:text-blue-600 transition-colors"
+                      >
+                          + Add New Customer
+                      </button>
+                  </>
+              )}
           </div>
 
-          {/* 2. PAYMENT BUILDER */}
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Add Payment</label>
-            <div className="flex space-x-2">
-                <select 
-                    value={currentMethod} 
-                    onChange={(e) => setCurrentMethod(e.target.value as any)}
-                    className="border rounded p-2 bg-white flex-1 outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                    <option value="Cash">Cash</option>
-                    <option value="POS">POS / Card</option>
-                    <option value="Transfer">Bank Transfer</option>
-                </select>
-                <input 
-                    type="number" 
-                    placeholder="Amount" 
-                    value={currentAmount}
-                    onChange={(e) => setCurrentAmount(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addPaymentLine()}
-                    className="border rounded p-2 w-32 outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button 
-                    onClick={addPaymentLine}
-                    disabled={!currentAmount}
-                    className="bg-blue-600 text-white px-4 rounded font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                    Add
-                </button>
+          {/* RIGHT: Payment Logic */}
+          <div className="lg:col-span-3 p-6 flex flex-col">
+            <div className="bg-gray-900 text-white p-6 rounded-2xl mb-6 shadow-md flex justify-between items-center">
+                <div>
+                    <div className="text-gray-400 font-bold text-sm uppercase tracking-widest mb-1">Total Due</div>
+                    <div className="text-5xl font-black tracking-tight">₦{total.toLocaleString()}</div>
+                </div>
             </div>
-            {balance > 0 && (
-                <div className="mt-2 flex gap-2">
-                    <button onClick={() => setCurrentAmount(balance.toString())} className="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300 transition-colors font-medium text-gray-700">
-                        Full Balance (₦{balance})
-                    </button>
-                </div>
-            )}
-          </div>
 
-          {/* 3. PAYMENT LIST & SUMMARY */}
-          <div>
-            <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">Payment Breakdown</h4>
-            {payments.length === 0 ? (
-                <div className="text-gray-400 text-sm italic py-2">No payments added yet.</div>
-            ) : (
-                <div className="space-y-2">
-                    {payments.map((p, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border border-gray-100 shadow-sm animate-fade-in">
-                            <span className="text-sm font-medium text-gray-700">{p.method}</span>
-                            <div className="flex items-center space-x-3">
-                                <span className="font-mono font-bold text-gray-900">₦{p.amount.toLocaleString()}</span>
-                                <button onClick={() => removePaymentLine(idx)} className="text-gray-300 hover:text-red-500 transition-colors text-lg leading-none">&times;</button>
-                            </div>
+            <div className="flex justify-between items-center mb-4">
+                <h4 className="font-bold text-gray-700 uppercase tracking-wider text-sm">Payment Breakdown</h4>
+                <label className="flex items-center space-x-2 cursor-pointer bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm hover:bg-gray-50">
+                    <input 
+                        type="checkbox" 
+                        checked={isCreditSale} 
+                        onChange={(e) => setIsCreditSale(e.target.checked)}
+                        className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm font-bold text-gray-700">Credit Sale</span>
+                </label>
+            </div>
+
+            <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+                {paymentLines.map((line, index) => (
+                    <div key={index} className="flex gap-3 items-end bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
+                        <div className="flex-1">
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Method</label>
+                            <select 
+                                value={line.method} 
+                                onChange={e => handleUpdatePaymentLine(index, 'method', e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 font-bold text-gray-700"
+                            >
+                                <option value="Cash">💵 Cash</option>
+                                <option value="Transfer">🏦 Transfer</option>
+                                <option value="POS">💳 POS Terminal</option>
+                            </select>
                         </div>
-                    ))}
-                </div>
-            )}
+                        <div className="flex-1">
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Amount (₦)</label>
+                            <input 
+                                type="number" 
+                                min="0"
+                                value={line.amount === 0 ? '' : line.amount} 
+                                onChange={e => handleUpdatePaymentLine(index, 'amount', Number(e.target.value))}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 font-black text-gray-900 text-lg"
+                                placeholder="0"
+                            />
+                        </div>
+                        {paymentLines.length > 1 && (
+                            <button 
+                                onClick={() => handleRemovePaymentLine(index)}
+                                className="p-3 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
+                                title="Remove Payment"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        )}
+                    </div>
+                ))}
 
-            {/* Totals Section */}
-            <div className="mt-4 border-t pt-4 space-y-1">
-                <div className="flex justify-between text-sm text-gray-600">
-                    <span>Total Due:</span>
-                    <span>₦{total.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm text-green-700 font-medium">
-                    <span>Amount Tendered:</span>
+                {!isCreditSale && balance > 0 && (
+                    <button 
+                        onClick={handleAddPaymentLine}
+                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 font-bold hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                        + Split Payment
+                    </button>
+                )}
+            </div>
+
+            <div className="mt-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                <div className="flex justify-between text-gray-500 text-sm font-bold">
+                    <span>Total Tendered</span>
                     <span>- ₦{totalPaid.toLocaleString()}</span>
                 </div>
                 <div className={`flex justify-between text-lg font-bold border-t border-dashed border-gray-300 pt-2 ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -359,9 +378,10 @@ const PaymentModal: React.FC<Props> = ({ total, onClose }) => {
                         : 'bg-green-600 hover:bg-green-700'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-                {isProcessing ? 'Processing...' : isCreditSale ? 'Confirm Credit Sale' : 'Complete Sale'}
+                {isProcessing ? 'Processing...' : isCreditSale ? 'Confirm Credit Sale' : 'Complete Transaction'}
             </button>
         </div>
+
       </div>
     </div>
   );

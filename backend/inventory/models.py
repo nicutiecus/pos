@@ -110,3 +110,17 @@ class StockTransferLog(TenantAwareModel):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, 
                                     null=True, blank=True, related_name='transfers_received')
+    
+
+class ProductPriceHistory(TenantAwareModel): 
+    
+    product = models.ForeignKey('inventory.Product', on_delete=models.CASCADE, related_name='price_history')
+    old_price = models.DecimalField(max_digits=12, decimal_places=2)
+    new_price = models.DecimalField(max_digits=12, decimal_places=2)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='price_changes')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.product.name}: {self.old_price} -> {self.new_price}"

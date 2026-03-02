@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from common.models import Branch
-from .models import Product, InventoryBatch, Category, StockTransferLog
+from .models import Product, InventoryBatch, Category, StockTransferLog, ProductPriceHistory
 from decimal import Decimal
 import random
 import string
@@ -181,3 +181,81 @@ def accept_transfer_service(*, user, transfer_id):
         transfer.save()
 
         return transfer
+
+# inventory/services.py
+# ... ensure you have your existing imports ...
+
+def reject_transfer_service(*, user, transfer_id: str, reason: str = ""):
+    with transaction.atomic():
+        # 1. Fetch and lock the transfer record
+        transfer = StockTransferLog.objects.select_for_update().get(id=transfer_id, tenant=user.tenant)
+        
+        if transfer.status != StockTransferLog.Status.PENDING:
+            raise ValidationError(f"Cannot reject. This transfer is already {transfer.status}.")
+
+        # 🔒 Security: Only people in the receiving branch (or Admins) can reject
+        if user.role not in ['Admin', 'Super_Admin'] and user.branch_id != transfer.destination_branch_id:
+            raise ValidationError("You do not have permission to reject stock for this branch.")
+
+        # 2. Find all 'In_Transit' batches linked to this transfer
+        transit_batches = InventoryBatch.objects.filter(
+            tenant=user.tenant,
+            batch_number=f"TRF-{transfer.id}",
+            status='In_Transit'
+        )
+
+        # 3. Return the stock to the Source Branch
+        for batch in transit_batches:
+            # Recreate the batch at the source branch to make it available for sale again
+            InventoryBatch.objects.create(
+                tenant=user.tenant,
+                branch=transfer.source_branch, # ⬅️ Going back to sender
+                product=transfer.product,
+                quantity_on_hand=batch.quantity_on_hand,
+                cost_price_at_receipt=batch.cost_price_at_receipt,
+                expiry_date=batch.expiry_date,
+                batch_number=f"RTN-{batch.batch_number}", # Tag as Returned
+                status='Active' # ⬅️ Available for sale again
+            )
+            # Delete the transit batch so it doesn't permanently clutter the destination branch
+            batch.delete()
+
+        # 4. Mark the transfer as Rejected and log the reason
+        transfer.status = StockTransferLog.Status.REJECTED
+        transfer.received_by = user
+        if reason:
+            transfer.notes = f"{transfer.notes}\n[REJECTED REASON]: {reason}".strip()
+        transfer.save()
+
+        # Optional: You could trigger an email here to notify the source branch manager!
+
+        return transfer
+    
+def update_product_price_service(*, user, product_id: str, new_price) -> Product:
+    # Fetch the product, ensuring it belongs to this user's tenant
+    product = Product.objects.filter(id=product_id, tenant=user.tenant).first()
+    
+    if not product:
+        raise ValidationError("Product not found.")
+
+    
+    old_price = product.selling_price 
+
+    if old_price==new_price:
+        return product
+# Wrap in a transaction so both the update and the log succeed together
+    with transaction.atomic():
+        # 1. Update the Product
+        product.selling_price = new_price
+        product.save(update_fields=['selling_price', 'updated_at'])
+
+        # 2. Create the Audit Log
+        ProductPriceHistory.objects.create(
+            tenant=user.tenant,
+            product=product,
+            old_price=old_price,
+            new_price=new_price,
+            changed_by=user
+        )
+
+    return product

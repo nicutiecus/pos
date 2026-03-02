@@ -128,6 +128,21 @@ const StockTransfers: React.FC = () => {
     }
   };
 
+  const handleRejectTransfer = async (transferId: string) => {
+    if (!window.confirm("Are you sure you want to reject this stock?")) return;
+    
+    try {
+        await api.post(`/inventory/transfers/${transferId}/reject/`);
+        alert("Transfer rejected! Stock not added to your inventory.");
+        
+        // Refresh list
+        const res = await api.get('/inventory/transfers/logs');
+        setTransfers(res.data);
+    } catch (err: any) {
+        alert(`Failed to accept transfer: ${err.response?.data?.message || err.message}`);
+    }
+  };
+
   // --- Derived Data ---
   // Filter for INCOMING based on Status "Pending" and matching the branch name
   const incomingTransfers = transfers.filter(t => {
@@ -290,6 +305,16 @@ const StockTransfers: React.FC = () => {
                                             >
                                                 Accept Stock
                                             </button>
+                                            
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <button 
+                                                onClick={() => handleRejectTransfer(t.id)}
+                                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-bold text-sm shadow-sm transition-colors"
+                                            >
+                                                Reject Stock
+                                            </button>
+                                            
                                         </td>
                                     </tr>
                                 ))}

@@ -77,7 +77,7 @@ const ProductCatalog: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await api.post('/products', newProduct);
+      const res = await api.post('/inventory/products', newProduct);
       setProducts([res.data, ...products]); // Prepend to list
       setShowCreateForm(false);
       setNewProduct({ name: '', sku: '', price: '', unit: 'carton', low_stock_threshold: 10 });

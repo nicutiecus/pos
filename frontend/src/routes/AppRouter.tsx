@@ -32,6 +32,8 @@ import StockTransfers from '../features/inventory/transfers/StockTransfers';
 // import POS
 import POSMain from '../features/pos/POSMain';
 import SalesHistory from '../features/pos/SalesHistory';
+//finances
+import ExpenseManagement from '../features/finances/ExpenseManagement';
 
 
 
@@ -79,6 +81,9 @@ const AppRouter: React.FC = () => {
   <Route path="transfer2" element={<StockTransfers />} />
     {/* Dashboard Home */}
     <Route index element={<ManagerDashboard />} />
+
+    {/* Finances */}
+    <Route path="expenses" element={<ExpenseManagement/>}/>
     
     {/* Reusing the Inventory components we built earlier */}
     <Route path="products" element={<ProductList />} />
