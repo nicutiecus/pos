@@ -18,7 +18,7 @@ class TenantRegistrationView(generics.CreateAPIView):
     permission_classes = [AllowAny] # Public endpoint
     serializer_class = TenantRegistrationSerializer
 
-# users/views.py
+
 
 class StaffViewSet(viewsets.ModelViewSet):
     permission_classes = [IsTenantAdmin]

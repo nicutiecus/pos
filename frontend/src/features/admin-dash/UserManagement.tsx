@@ -15,7 +15,7 @@ interface User {
   first_name: string; 
   last_name: string;  
   role: 'Branch_Manager' | 'Cashier' | 'Tenant_Admin';
-  branch?: string;
+  branch_name?: string;
   is_active?: boolean; // Added for status toggling
 }
 
@@ -113,7 +113,7 @@ const UserManagement: React.FC = () => {
     if (!window.confirm(`Are you sure you want to ${actionText} this account?`)) return;
 
     try {
-      await api.patch(`/staff/${userId}/status/`, {
+      await api.patch(`/staff/${userId}/`, {
         is_active: !currentStatus
       });
       
@@ -228,7 +228,7 @@ const UserManagement: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.branch || 'All Branches (HQ)'}
+                    {user.branch_name || 'All Branches (HQ)'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {isActive ? (

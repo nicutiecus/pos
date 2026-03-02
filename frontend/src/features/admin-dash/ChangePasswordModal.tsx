@@ -20,7 +20,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ userId, userN
 
     setIsSubmitting(true);
     try {
-      await api.post(`/users/${userId}/change-password/`, {
+      await api.patch(`/staff/${userId}/`, {
         new_password: newPassword
       });
       alert(`Password for ${userName} has been successfully updated.`);

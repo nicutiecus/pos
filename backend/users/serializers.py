@@ -2,6 +2,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from django.db import transaction
 from .models import User, Tenant
+from rest_framework import serializers
+
 
 class TenantTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -83,7 +85,7 @@ class TenantRegistrationSerializer(serializers.ModelSerializer):
         return user
     
 
-# users/serializers.py
+
 
 class StaffCreationSerializer(serializers.ModelSerializer):
     branch_id = serializers.UUIDField(write_only=True)
@@ -117,3 +119,49 @@ class StaffCreationSerializer(serializers.ModelSerializer):
             **validated_data
         )
         return new_staff
+
+    def update(self, instance, validated_data):
+        # 1. Pop the password out so standard save doesn't save it as plain text
+        password = validated_data.pop('password', None)
+
+        # 2. Update the other fields normally (like is_active)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # 3. Securely hash the new password if one was sent!
+        if password:
+            instance.set_password(password)
+
+        instance.save()
+        return instance
+
+
+"""
+class StaffUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        # Include the fields you want them to be able to update
+        fields = ['is_active', 'password', 'first_name', 'last_name'] 
+        
+        # Security: Make sure the password can NEVER be read in a GET request
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False}
+        }
+
+    def update(self, instance, validated_data):
+        # 1. Pop the password out of the data so the standard save doesn't touch it
+        password = validated_data.pop('password', None)
+
+        # 2. Update all the other normal fields (like is_active = False)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # 3. If a password was provided, hash it safely using set_password()
+        if password:
+            instance.set_password(password)
+
+        # 4. Save to the database
+        instance.save()
+        return instance
+
+        """

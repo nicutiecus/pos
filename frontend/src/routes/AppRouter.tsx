@@ -70,6 +70,7 @@ const AppRouter: React.FC = () => {
             <Route path ="reports" element={<ReportsDashboard/>}/>
             <Route path ="customers" element={<CustomerManagement/>}/>
             <Route path="dashboard" element={<AdminDashboard/>}/>
+            <Route path="transfer" element={<StockTransfers />} />
         </Route>
       </Route>
 
