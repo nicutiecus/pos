@@ -1,0 +1,76 @@
+# .github/workflows/deploy.yml
+name: POS CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ] # Triggers when you push/merge to main
+
+jobs:
+  test:
+    name: Run Django Tests
+    runs-on: ubuntu-latest
+    
+    # Spin up temporary databases for the tests
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: pos_user
+          POSTGRES_PASSWORD: pos_password
+          POSTGRES_DB: pos_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # Match your Dockerfile version
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Tests
+        env:
+          # Tell Django to connect to the temporary test databases
+          DATABASE_URL: postgres://pos_user:pos_password@localhost:5432/pos_test_db
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          SECRET_KEY: "temporary-test-key"
+        run: |
+          python manage.py test
+
+  deploy:
+    name: Deploy to Production Server
+    needs: test # CRITICAL: This ensures deployment ONLY happens if tests pass
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          # The -T flag below is important for running Docker exec in non-interactive CI environments
+          script: |
+            cd /path/to/your/production/folder
+            git pull origin main
+            docker compose build
+            docker compose up -d
+            docker compose exec -T web python manage.py migrate
+            docker compose exec -T web python manage.py collectstatic --noinput
