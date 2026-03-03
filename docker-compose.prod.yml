@@ -13,20 +13,4 @@ services:
   redis:
     image: redis:7-alpine
 
-  celery:
-    image: pos-core-app      # 3. Celery skips building and just reuses the finished image!
-    command: celery -A config worker -l INFO
-    env_file:
-      - .env
-    depends_on:
-      - web                  # Waits for the 'web' service to finish building the image
-      - redis
-
-  celery-beat:
-    image: pos-core-app      # 4. Celery Beat also reuses the image!
-    command: celery -A config beat -l INFO
-    env_file:
-      - .env
-    depends_on:
-      - web
-      - redis
+  
