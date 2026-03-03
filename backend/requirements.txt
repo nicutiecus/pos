@@ -41,3 +41,4 @@ redis>=5.0.0
 gunicorn
 weasyprint
 dj-database-url
+whitenoise
