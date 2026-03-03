@@ -4,7 +4,7 @@ services:
   web:
     build: ./backend                 # 1. Dokploy builds the Dockerfile here
     image: pos-core-app      # 2. It saves the finished image with this name
-    command: gunicorn myproject.wsgi:application --bind 0.0.0.0:8000
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000
     env_file:
       - .env
     depends_on:
@@ -15,7 +15,7 @@ services:
 
   celery:
     image: pos-core-app      # 3. Celery skips building and just reuses the finished image!
-    command: celery -A myproject worker -l INFO
+    command: celery -A config worker -l INFO
     env_file:
       - .env
     depends_on:
@@ -24,7 +24,7 @@ services:
 
   celery-beat:
     image: pos-core-app      # 4. Celery Beat also reuses the image!
-    command: celery -A myproject beat -l INFO
+    command: celery -A config beat -l INFO
     env_file:
       - .env
     depends_on:
