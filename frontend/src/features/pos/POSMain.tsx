@@ -3,12 +3,15 @@ import ProductGrid from './ProductGrid';
 import CartSidebar from './CartSidebar';
 import { useState } from 'react';
 import DebtRepaymentModal from './DebtRepaymentModal';
+import ShiftGuard from './ShiftGuard';
 
 const POSMain: React.FC = () => {
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
 
 
   return (
+
+    <ShiftGuard>
     
     <div className="flex h-full w-full overflow-hidden">
       <header className="bg-gray-800 text-white p-4 flex justify-between items-center">
@@ -34,6 +37,7 @@ const POSMain: React.FC = () => {
                 <DebtRepaymentModal onClose={() => setIsDebtModalOpen(false)} />
             )}
     </div>
+    </ShiftGuard>
   );
 };
 

@@ -9,8 +9,9 @@ from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer,
 
 from .services import create_sale_service, pay_customer_debt_service, close_shift_service
 from rest_framework.views import APIView
-from .models import SalesOrder
+from .models import SalesOrder, ShiftReport
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 
 
@@ -207,3 +208,82 @@ class ReceiptAPIView(APIView):
         }
 
         return Response(receipt_data)
+
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status as drf_status
+from .models import ShiftReport
+
+class ActiveShiftAPIView(APIView):
+    """
+    Checks if the logged-in user currently has an Open shift.
+    Called immediately when the React frontend loads the POS page.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # Look for this specific user's 'Open' shift
+        active_shift = ShiftReport.objects.filter(
+            cashier=user, 
+            tenant=user.tenant,
+            status=ShiftReport.Status.OPEN
+        ).first()
+
+        if active_shift:
+            # They already have an open shift, send them right back to selling!
+            return Response({
+                "status": "active",
+                "shift_code": active_shift.shift_code,
+                "start_time": active_shift.start_time,
+                "expected_cash": active_shift.expected_cash
+            })
+        
+        # No active shift found. Frontend should route them to the "Start Shift" screen.
+        return Response({
+            "status": "none"
+        })
+
+
+class StartShiftAPIView(APIView):
+    """
+    Creates a brand new Open shift for the cashier.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        
+        # Safety Check: Prevent the creation of duplicate open shifts
+        active_shift = ShiftReport.objects.filter(
+            cashier=user, 
+            tenant=user.tenant,
+            status=ShiftReport.Status.OPEN
+        ).first()
+
+        if active_shift:
+            return Response(
+                {"error": "You already have an open shift.", "shift_code": active_shift.shift_code}, 
+                status=drf_status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create the new shift
+        # Note: Assuming your user model has a 'branch' foreign key attached to it!
+        new_shift = ShiftReport.objects.create(
+            tenant=user.tenant,
+            branch=user.branch, 
+            cashier=user,
+            status=ShiftReport.Status.OPEN
+            # Note: expected_cash defaults to 0 based on your model, 
+            # but if you accept an 'opening_float' from the frontend, you would set it here!
+        )
+
+        return Response({
+            "message": "Shift started successfully.",
+            "shift_code": new_shift.shift_code,
+            "start_time": new_shift.start_time
+        }, status=drf_status.HTTP_201_CREATED)
