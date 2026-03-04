@@ -13,10 +13,13 @@ def generate_receipt_id():
     # Generates an 8-character string like "3K9XN2PA"
     return generate('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 8)
 
+def generate_customer_id():
+    return generate('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 6)
+
 
 
 class Customer(TenantAwareModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.CharField(primary_key=True, default=generate_customer_id, editable=False)
     name = models.CharField(max_length=150, db_index=True)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20, null=True, blank=True)

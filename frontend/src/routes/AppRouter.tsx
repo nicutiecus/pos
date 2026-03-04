@@ -25,7 +25,6 @@ import InventoryReceiving from '../features/inventory/InventoryReceiving';
 import StockTransferForm from '../features/inventory/transfers/StockTransferForm';
 import CategoryManagement from '../features/inventory/CategoryManagement';
 import InventoryManagement from '../features/inventory/InventoryManagement';
-import ReportsDashboard from '../features/reports/ReportsDashboard';
 import CustomerManagement from '../features/customers/CustomerManagement';
 //new transfer form
 import StockTransfers from '../features/inventory/transfers/StockTransfers';
@@ -36,6 +35,7 @@ import SalesHistory from '../features/pos/SalesHistory';
 import ExpenseManagement from '../features/finances/ExpenseManagement';
 //Reports
 import ProfitReport from '../features/reports/ProfitReport';
+import ReportsDashboard from '../features/reports/ReportsDashboard';
 
 
 
