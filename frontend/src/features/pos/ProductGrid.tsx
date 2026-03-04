@@ -3,7 +3,7 @@ import api from '../../api/axiosInstance';
 import { useAppDispatch } from '../../store/hooks';
 import { addToCart } from '../../store/slices/cartSlice';
 // Import your new offline DB utilities
-import { saveProductsLocally, getLocalProducts } from '../../utils/offlineDB';
+import { saveProductsLocally, getLocalProducts } from '../../utils/offlineDb';
 
 // --- Interfaces ---
 
@@ -146,8 +146,8 @@ const ProductGrid: React.FC = () => {
                 onClick={() => {
                   if (product.available_qty > 0) {
                       dispatch(addToCart({
-                          product_id: product.id,
-                          product_name: product.name,
+                          id: product.id,
+                          name: product.name,
                           price: Number(product.selling_price),
                           quantity: 1
                       }));

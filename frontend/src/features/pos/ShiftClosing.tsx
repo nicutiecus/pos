@@ -96,7 +96,7 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
   // --- Calculations ---
   const discrepancy = Number(declaredCash || 0) - (shiftData?.expected_cash || 0);
   const isShort = discrepancy < 0;
-  const isOver = discrepancy > 0;
+  //const isOver = discrepancy > 0;
 
   if (isLoading) return <div className="p-10 text-center text-gray-500">Loading Shift Data...</div>;
 

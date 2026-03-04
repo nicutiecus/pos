@@ -25,7 +25,7 @@ const DebtRepaymentModal: React.FC<Props> = ({ onClose }) => {
   
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('Cash');
-  const [notes, setNotes] = useState('Debt Repayment');
+  const [notes] = useState('Debt Repayment');
   
   const [isProcessing, setIsProcessing] = useState(false);
 

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import api from '../api/axiosInstance';
-import { getOfflineOrders, removeOfflineOrder } from './offlineDB';
+import { getOfflineOrders, removeOfflineOrder } from './offlineDb';
 
 export const useOfflineSync = () => {
   useEffect(() => {

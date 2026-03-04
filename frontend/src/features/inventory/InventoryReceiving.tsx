@@ -36,7 +36,6 @@ interface ReceivePayload {
 }
 
 const InventoryReceiving: React.FC = () => {
-  const location = useLocation();
   const userRole = localStorage.getItem('userRole');
   const storedBranchId = localStorage.getItem('branchId');
 

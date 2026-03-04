@@ -3,7 +3,7 @@ import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { clearCart } from '../../store/slices/cartSlice';
 import api from '../../api/axiosInstance';
 // --- IMPORT OFFLINE DB UTILITY ---
-import { saveOfflineOrder } from '../../utils/offlineDB';
+import { saveOfflineOrder } from '../../utils/offlineDb';
 
 // --- Types ---
 interface Props {
@@ -147,7 +147,7 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
     };
 
     try {
-        const response = await api.post('/sales/create/', payload);
+         await api.post('/sales/create/', payload);
         alert('Payment Successful!');
         
         // --- TODO: TRIGGER RECEIPT PRINTING HERE ---

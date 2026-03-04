@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
-import { removeFromCart, decreaseQuantity, addToCart, clearCart } from '../../store/slices/cartSlice';
+import { decreaseQuantity, addToCart, clearCart } from '../../store/slices/cartSlice';
 import PaymentModal from './PaymentModal'; // We will build this next
 
 const CartSidebar: React.FC = () => {

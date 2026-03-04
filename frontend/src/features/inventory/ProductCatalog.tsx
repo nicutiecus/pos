@@ -1,6 +1,6 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import api from '../../api/axiosInstance';
-import { isAxiosError } from 'axios';
+//import { isAxiosError } from 'axios';
 
 // --- Domain Interfaces ---
 interface Product {
@@ -33,7 +33,7 @@ const ProductCatalog: React.FC = () => {
   // --- Global State ---
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  //const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // --- UI Toggles ---
   const [showCreateForm, setShowCreateForm] = useState(false);

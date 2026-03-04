@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../api/axiosInstance';
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, 
-  CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 
 // --- Interfaces ---
@@ -140,7 +140,7 @@ const AdminDashboard: React.FC = () => {
                         <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(value) => `₦${value/1000}k`} />
                         <Tooltip 
-                            formatter={(value: number) => [`₦${value.toLocaleString()}`, 'Revenue']}
+                            formatter={(value: any) => [`₦${value.toLocaleString()}`, 'Revenue']}
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
                         />
                         <Line type="monotone" dataKey="revenue" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4, fill: '#3B82F6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
@@ -160,7 +160,7 @@ const AdminDashboard: React.FC = () => {
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(value) => `₦${value/1000}k`} />
                         <Tooltip 
                             cursor={{ fill: '#F3F4F6' }}
-                            formatter={(value: number) => [`₦${value.toLocaleString()}`, 'Revenue']}
+                            formatter={(value: any) => [`₦${value.toLocaleString()}`, 'Revenue']}
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
                         />
                         <Bar dataKey="today_revenue" fill="#10B981" radius={[4, 4, 0, 0]} barSize={40} />
