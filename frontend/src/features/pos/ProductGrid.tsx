@@ -70,7 +70,7 @@ const ProductGrid: React.FC = () => {
         // 4. Save the fresh merged data to IndexedDB for future offline use
         try {
             await saveProductsLocally(mergedProducts);
-        } catch (dbErr) {
+        } catch (dbErr: any) { // FIX: Added explicit 'any' type
             console.error("Failed to cache products to IndexedDB:", dbErr);
         }
 
@@ -86,7 +86,7 @@ const ProductGrid: React.FC = () => {
             } else {
                 console.error("No local data found. System cannot operate offline yet.");
             }
-        } catch (fallbackErr) {
+        } catch (fallbackErr: any) { // FIX: Added explicit 'any' type
             console.error("Failed to retrieve from local DB:", fallbackErr);
         }
 
@@ -149,7 +149,8 @@ const ProductGrid: React.FC = () => {
                           id: product.id,
                           name: product.name,
                           price: Number(product.selling_price),
-                          quantity: 1
+                          sku: product.sku
+                          // FIX: Removed 'quantity: 1' to satisfy the Omit<CartItem, "quantity"> Redux constraint
                       }));
                   }
                 }}

@@ -127,31 +127,51 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
 
     setIsProcessing(true);
 
+    // --- FIX 1 & 2: DEDUCT CHANGE FROM CASH & UPPERCASE METHOD ---
+    const changeDue = balance < 0 ? Math.abs(balance) : 0;
+    let remainingChangeToDeduct = changeDue;
+
+    const formattedPayments = paymentLines.map(p => {
+        let finalAmount = Number(p.amount);
+
+        // We only give physical change out of Cash payments!
+        if (p.method === 'Cash' && remainingChangeToDeduct > 0) {
+            if (finalAmount >= remainingChangeToDeduct) {
+                finalAmount -= remainingChangeToDeduct;
+                remainingChangeToDeduct = 0;
+            } else {
+                remainingChangeToDeduct -= finalAmount;
+                finalAmount = 0;
+            }
+        }
+
+        return {
+            method: p.method,
+            amount: finalAmount
+        };
+    }).filter(p => p.amount > 0); // Remove any payment lines that became 0
+
     const payload = {
         branch_id: localStorage.getItem('branchId'),
-        cashier_id: localStorage.getItem('userId'), // Adjust depending on your auth payload
+        cashier_id: localStorage.getItem('userId'),
         customer_id: selectedCustomer?.id || null,
         total_amount: total,
         discount_amount: discountAmount,
         is_credit: isCreditSale,
         credit_balance: isCreditSale ? balance : 0,
-        payments: paymentLines.map(p => ({
-            method: p.method,
-            amount: Number(p.amount)
-        })),
+        payments: formattedPayments, // Use the corrected array here
         items: cartItems.map(item => ({
-            product_id: item.product_id,
+            product_id: item.id, // FIX 3: Changed from item.product_id to fix TS Error
             quantity: item.quantity,
             unit_price: item.price
         }))
     };
 
     try {
-         await api.post('/sales/create/', payload);
+        await api.post('/sales/create/', payload);
         alert('Payment Successful!');
         
         // --- TODO: TRIGGER RECEIPT PRINTING HERE ---
-        // e.g. setReceiptData(response.data.receipt); printReceipt();
         
         dispatch(clearCart());
         onClose();
@@ -161,11 +181,8 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
         if (!navigator.onLine || err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
             console.warn("Network disconnected. Saving order to local IndexedDB...");
             try {
-                // Save exactly what we would have sent to Django
                 await saveOfflineOrder(payload);
-                
                 alert("You are offline! Order has been saved locally and will sync when the internet returns.");
-                
                 dispatch(clearCart());
                 onClose();
             } catch (dbErr) {
@@ -173,14 +190,12 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
                 alert("Critical Error: Could not save order offline.");
             }
         } else {
-            // Normal server error (e.g. 400 Bad Request, Out of Stock)
             alert(`Checkout failed: ${err.response?.data?.message || err.message}`);
         }
     } finally {
         setIsProcessing(false);
     }
   };
-
   const filteredCustomers = customers.filter(c => 
     c.name.toLowerCase().includes(customerSearch.toLowerCase()) || 
     c.phone.includes(customerSearch)
