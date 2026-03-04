@@ -34,6 +34,8 @@ import POSMain from '../features/pos/POSMain';
 import SalesHistory from '../features/pos/SalesHistory';
 //finances
 import ExpenseManagement from '../features/finances/ExpenseManagement';
+//Reports
+import ProfitReport from '../features/reports/ProfitReport';
 
 
 
@@ -71,6 +73,7 @@ const AppRouter: React.FC = () => {
             <Route path ="customers" element={<CustomerManagement/>}/>
             <Route path="dashboard" element={<AdminDashboard/>}/>
             <Route path="transfer" element={<StockTransfers />} />
+            <Route path="profit-report" element={<ProfitReport/>}/>
         </Route>
       </Route>
 

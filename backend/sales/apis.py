@@ -8,6 +8,9 @@ from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer,
                           CloseShiftSerializer)
 
 from .services import create_sale_service, pay_customer_debt_service, close_shift_service
+from rest_framework.views import APIView
+from .models import SalesOrder
+from django.shortcuts import get_object_or_404
 
 
 
@@ -134,3 +137,73 @@ class CloseShiftApi(views.APIView):
             return Response({"message": "Shift closed successfully."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class ReceiptAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, order_id):
+        # 🔒 1. Fetch the order with strict tenant isolation
+        order = get_object_or_404(SalesOrder, id=order_id, tenant=request.user.tenant)
+        
+        # 🏢 2. Format Branch/Store Information
+        branch_info = {
+            "name": order.branch.name,
+            # Assuming your Branch model has phone and address fields
+            "address": getattr(order.branch, 'address', ''), 
+            "phone": getattr(order.branch, 'phone', '')
+        }
+
+        # 👤 3. Format Customer Information (If attached)
+        customer_info = None
+        if order.customer:
+            customer_info = {
+                "name": order.customer.name,
+                "phone": order.customer.phone,
+                "current_debt": order.customer.current_debt
+            }
+
+        # 🛍️ 4. Format the Items Array
+        items_list = []
+        for item in order.items.select_related('product').all():
+            items_list.append({
+                "product_name": item.product.name, # Adjust if your product name field is different
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+                "subtotal": item.subtotal
+            })
+
+        # 💳 5. Format the Payments Array (Handles split payments!)
+        payments_list = []
+        for payment in order.payments.all():
+            payments_list.append({
+                "method": payment.method,
+                "amount": payment.amount
+            })
+
+        # 🧾 6. Construct the Final Print Payload
+        receipt_data = {
+            "receipt_no": str(order.id).split('-')[0].upper(), # Generates a short, readable receipt string from the UUID
+            "date": order.created_at.strftime("%Y-%m-%d %I:%M %p"), # e.g., 2026-03-04 02:30 PM
+            "cashier": order.user.get_full_name() or order.user.email,
+            
+            "store": branch_info,
+            "customer": customer_info,
+            "items": items_list,
+            
+            "totals": {
+                # Calculate subtotal before discounts
+                "subtotal": order.total_amount + order.discount_amount, 
+                "discount": order.discount_amount,
+                "grand_total": order.total_amount,
+                "amount_paid": order.amount_paid,
+                # If they overpaid in cash, this is their change. If they underpaid, it's their remaining balance.
+                "change_or_balance": order.amount_paid - order.total_amount 
+            },
+            
+            "payment_methods": payments_list,
+            "payment_status": order.payment_status
+        }
+
+        return Response(receipt_data)

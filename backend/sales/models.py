@@ -4,6 +4,14 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from common.models import TenantAwareModel, Branch
 from django.utils import timezone
+from nanoid import generate
+
+
+# 1. Add the generator function at the top of your file
+def generate_receipt_id():
+    # Uses a custom alphabet (No 0, O, 1, I, or lowercase letters)
+    # Generates an 8-character string like "3K9XN2PA"
+    return generate('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 8)
 
 
 
@@ -52,7 +60,8 @@ class SalesOrder(TenantAwareModel):
         PARTIAL = 'Partial', _('Partial')
         PENDING = 'Pending', _('Pending')
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.CharField(primary_key=True, max_length=8, 
+        default=generate_receipt_id, editable=False)
     branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
