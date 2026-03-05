@@ -22,7 +22,7 @@ class StockReceiveSerializer(serializers.Serializer):
 
 
 class ProductCreateSerializer(serializers.ModelSerializer):
-    category_id = serializers.UUIDField(required=False, allow_null=True)
+    category_id = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = Product
