@@ -1,8 +1,9 @@
 from django.db.models import Sum, F, Q
 from django.utils import timezone
 from .models import InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory
-from django.utils import timezone
 from django.core.exceptions import PermissionDenied
+
+
 
 
 
@@ -27,6 +28,55 @@ def get_stock_levels(*, user, branch_id: str):
     ).annotate(
         total_quantity=Sum('batches__quantity_on_hand')
     ).values('id', 'name', 'sku', 'unit_type', 'total_quantity')
+
+
+def get_organization_stock_levels(*, user):
+    """
+    Fetches stock levels for all products across all branches.
+    Groups the total stock per product, and provides a branch-by-branch breakdown.
+    """
+    # 1. Single optimized database query
+    # Groups by Product AND Branch, summing up the quantities of any active batches
+    batches = InventoryBatch.objects.filter(
+        tenant=user.tenant, 
+        quantity_on_hand__gt=0
+    ).values(
+        'product__id', 
+        'product__name', 
+        'branch__id', 
+        'branch__name'
+    ).annotate(
+        total_quantity=Sum('quantity_on_hand')
+    ).order_by('product__name', 'branch__name')
+
+    # 2. Format the data into a clean JSON structure for the frontend
+    formatted_data = {}
+    
+    for batch in batches:
+        pid = batch['product__id']
+        
+        # If we haven't seen this product yet, initialize it
+        if pid not in formatted_data:
+            formatted_data[pid] = {
+                "product_id": pid,
+                "product_name": batch['product__name'],
+                "total_organization_stock": 0,
+                "branch_breakdown": []
+            }
+        
+        # Add the branch's stock to the organization total
+        qty = batch['total_quantity']
+        formatted_data[pid]['total_organization_stock'] += qty
+        
+        # Add the specific branch details to the breakdown array
+        formatted_data[pid]['branch_breakdown'].append({
+            "branch_id": batch['branch__id'],
+            "branch_name": batch['branch__name'],
+            "stock": qty
+        })
+        
+    # Return as a flat list of product dictionaries
+    return list(formatted_data.values())
 
 def get_expiring_batches(*, user, branch_id: str, tenant_id: str, days_threshold: int = 7) -> list[dict]:
     """

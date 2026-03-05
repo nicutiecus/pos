@@ -26,6 +26,7 @@ import StockTransferForm from '../features/inventory/transfers/StockTransferForm
 import CategoryManagement from '../features/inventory/CategoryManagement';
 import InventoryManagement from '../features/inventory/InventoryManagement';
 import CustomerManagement from '../features/customers/CustomerManagement';
+import OrganizationInventory from '../features/inventory/OrganizationInventory';
 //new transfer form
 import StockTransfers from '../features/inventory/transfers/StockTransfers';
 // import POS
@@ -63,6 +64,7 @@ const AppRouter: React.FC = () => {
         <Route path="/admin" element={<AdminLayout />}>
         {/* Default admin page redirects to branches for now */}
             <Route index element={<Navigate to ='dashboard'/>} /> {/* Matches /admin */}
+            <Route path="organization-stock" element={<OrganizationInventory/>}/>
             <Route path="inventory" element={<InventoryManagement/>} />
             <Route path="inventory/receive" element={<InventoryReceiving/>}/>
             <Route path="branches" element={<BranchManagement />} />

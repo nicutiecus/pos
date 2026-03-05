@@ -9,10 +9,12 @@ from .services import (receive_stock_service, create_product_service,
                        reject_transfer_service, update_product_price_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
-                        get_product_price_history
+                        get_product_price_history, get_organization_stock_levels
                         )
 from django.core.exceptions import PermissionDenied, ValidationError
 from .models import StockTransferLog
+
+from rest_framework.views import APIView
 
 
 
@@ -281,3 +283,21 @@ class ProductPriceHistoryApi(views.APIView):
         history_qs = get_product_price_history(user=request.user, product_id=product_id)
         serializer = ProductPriceHistorySerializer(history_qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+class OrganizationStockLevelsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # 🔒 Security Check: Block standard cashiers
+        admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+        if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
+            raise PermissionDenied("Access restricted. Only Tenant Admins can view organization-wide stock.")
+        
+        # Fetch data via selector
+        data = get_organization_stock_levels(user=user)
+        
+        return Response(data)
