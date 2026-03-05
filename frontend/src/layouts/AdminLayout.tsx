@@ -21,7 +21,7 @@ const AdminLayout: React.FC = () => {
           <Link to="/POS" className="p-2 hover:bg-gray-800 rounded">POS</Link>
           <Link to="/admin/categories" className="p-2 hover:bg-gray-800 rounded">Product Categories</Link>
           <Link to="/admin/inventory" className="p-2 hover:bg-gray-800 rounded">Inventory</Link>
-          <Link to="/organization-stock" className="p-2 hover:bg-gray-800 rounded">Organization Inventory</Link>
+          <Link to="/admin/organization-stock" className="p-2 hover:bg-gray-800 rounded">Organization Inventory</Link>
           <Link to="/admin/transfer" className="p-2 hover:bg-gray-800 rounded">Transfers</Link>
           <Link to="/admin/branches" className="p-2 hover:bg-gray-800 rounded">Branches</Link>
           <Link to="/admin/customers" className="p-2 hover:bg-gray-800 rounded">Customers</Link>
