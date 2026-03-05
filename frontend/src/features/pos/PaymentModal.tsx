@@ -13,7 +13,7 @@ interface Props {
 }
 
 interface Customer {
-  id: number;
+  id: string;
   name: string;
   phone: string;
   credit_limit: number;
