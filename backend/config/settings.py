@@ -30,7 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-s(4%^)gy)gl(+)stqr%_drut0_q#z(i_-lgrxpy6fvf&zf=10^'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.environ.get('DEBUG')
 
 ALLOWED_HOSTS = [os.environ.get('ALLOWED_HOSTS') ]
 
@@ -156,7 +156,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=50),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True, # Invalidate old refresh token after use
@@ -171,7 +171,8 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://localhost:5173"
+    "http://localhost:5173",
+    "https://teqpos.com",
 ]
 
 
@@ -193,9 +194,6 @@ CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
-
-STATIC_URL = 'static/'
-
 # This tells Django where to put the files when you run collectstatic
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
@@ -205,3 +203,10 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# 1. Tell Django to trust the proxy's secure header
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# 2. Add your domain to CSRF_TRUSTED_ORIGINS 
+# (Required in Django 4.0+ so you can actually log into the admin panel via HTTPS)
+CSRF_TRUSTED_ORIGINS = ['https://teqpos.com']
