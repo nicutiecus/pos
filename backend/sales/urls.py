@@ -13,8 +13,8 @@ urlpatterns = [
     # Customer CRUD endpoints (e.g., POST /api/sales/customers/ to add a customer)
     path('', include(router.urls)),
     # Custom Customer Actions
-    path('customers/<uuid:customer_id>/pay-debt/', PayDebtApi.as_view(), name='pay-debt'),
-    path('customers/<uuid:customer_id>/ledger/', CustomerLedgerApi.as_view(), name='customer-ledger'),
+    path('customers/<str:customer_id>/pay-debt/', PayDebtApi.as_view(), name='pay-debt'),
+    path('customers/<str:customer_id>/ledger/', CustomerLedgerApi.as_view(), name='customer-ledger'),
 
     path('create/', CreateSaleApi.as_view(), name='create-sale'),
     path('list/', SalesListApi.as_view(), name = 'sales-list'),
