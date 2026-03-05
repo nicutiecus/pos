@@ -18,6 +18,7 @@ const AdminLayout: React.FC = () => {
         </div>
         <nav className="flex-1 p-4 flex flex-col gap-2">
           <Link to="/admin" className="p-2 hover:bg-gray-800 rounded">Overview</Link>
+          <Link to="/admin/categories" className="p-2 hover:bg-gray-800 rounded">Product Categories</Link>
           <Link to="/admin/inventory" className="p-2 hover:bg-gray-800 rounded">Inventory</Link>
           <Link to="/admin/transfer" className="p-2 hover:bg-gray-800 rounded">Transfers</Link>
           <Link to="/admin/branches" className="p-2 hover:bg-gray-800 rounded">Branches</Link>
