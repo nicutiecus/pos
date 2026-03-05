@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from .models import SalesOrder, ShiftReport
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from common.models import Branch
 
 
 
@@ -251,17 +252,17 @@ class ActiveShiftAPIView(APIView):
 
 class StartShiftAPIView(APIView):
     """
-    Creates a brand new Open shift for the cashier.
+    Creates a brand new Open shift for the cashier or admin.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
+        data = request.data
         
-        # Safety Check: Prevent the creation of duplicate open shifts
+        # 1. Prevent duplicate open shifts
         active_shift = ShiftReport.objects.filter(
             cashier=user, 
-            tenant=user.tenant,
             status=ShiftReport.Status.OPEN
         ).first()
 
@@ -271,19 +272,40 @@ class StartShiftAPIView(APIView):
                 status=drf_status.HTTP_400_BAD_REQUEST
             )
 
-        # Create the new shift
-        # Note: Assuming your user model has a 'branch' foreign key attached to it!
+        # 2. Determine the correct Branch
+        admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+        
+        if getattr(user, 'role', '') in admin_roles or user.is_superuser:
+            # Admins MUST pass a branch_id from the frontend to tell the system where they are working
+            branch_id = data.get('branch_id')
+            if not branch_id:
+                return Response(
+                    {"error": "Admins must select a branch to start a shift."}, 
+                    status=drf_status.HTTP_400_BAD_REQUEST
+                )
+            # TenantAwareModel handles the tenant filtering automatically
+            shift_branch = get_object_or_404(Branch, id=branch_id)
+        else:
+            # Standard users automatically use their assigned branch
+            shift_branch = user.branch
+            if not shift_branch:
+                 return Response(
+                    {"error": "Your account is not assigned to a branch. Contact an administrator."}, 
+                    status=drf_status.HTTP_400_BAD_REQUEST
+                )
+
+        # 3. Create the new shift
         new_shift = ShiftReport.objects.create(
             tenant=user.tenant,
-            branch=user.branch, 
+            branch=shift_branch, 
             cashier=user,
             status=ShiftReport.Status.OPEN
-            # Note: expected_cash defaults to 0 based on your model, 
-            # but if you accept an 'opening_float' from the frontend, you would set it here!
+            # Add expected_cash here if you accept an opening float from the frontend!
         )
 
         return Response({
             "message": "Shift started successfully.",
             "shift_code": new_shift.shift_code,
-            "start_time": new_shift.start_time
+            "start_time": new_shift.start_time,
+            "branch_id": shift_branch.id
         }, status=drf_status.HTTP_201_CREATED)
