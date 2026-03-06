@@ -39,6 +39,9 @@ class Product(TenantAwareModel):
     class Meta:
         db_table = 'products'
 
+    def __str__(self):
+        return self.name
+
 class InventoryBatch(TenantAwareModel):
     """
     Tracks specific arrivals of stock (expiry, batch number).

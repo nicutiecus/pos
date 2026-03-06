@@ -68,7 +68,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           # The -T flag below is important for running Docker exec in non-interactive CI environments
           script: |
-            cd /path/to/your/production/folder
+            cd /backend
             git pull origin main
             docker compose build
             docker compose up -d
