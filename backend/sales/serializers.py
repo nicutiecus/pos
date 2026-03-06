@@ -22,7 +22,7 @@ class PaymentSerializer(serializers.Serializer):
 
 class CreateSaleSerializer(serializers.Serializer):
     branch_id = serializers.UUIDField()
-    customer_id = serializers.UUIDField(required=False, allow_null=True)
+    customer_id = serializers.IntegerField(required=False, allow_null=True)
     items = SaleItemSerializer(many=True)
     payments = serializers.ListField(child=PaymentSerializer(), required=False) # Optional (e.g. Credit Sale)
     discount_amount = serializers.DecimalField(
