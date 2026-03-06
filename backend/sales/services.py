@@ -35,7 +35,10 @@ def create_sale_service(
     3. Double-entry Ledger updates for Credit Sales.
     4. Cost Price Snapshotting for accurate P&L reports.
     """
-    
+    active_shift = ShiftReport.objects.filter(
+        cashier=user,
+        status=ShiftReport.Status.OPEN
+    ).first()
     # 1. Scope Validation
     branch = Branch.objects.filter(id=branch_id, tenant=user.tenant).first()
     if not branch:
@@ -227,7 +230,7 @@ def pay_customer_debt_service(
     *, 
     user, 
     customer_id: str, 
-    branch_id: str, # ✅ ADD THIS
+    branch_id: str, 
     amount: Decimal, 
     method: str, 
     notes: str = ""
