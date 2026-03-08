@@ -5,30 +5,35 @@ import api from '../../api/axiosInstance';
 // --- Types ---
 interface InventoryItem {
   id: number;
+  product_id?: string | number; // Fallback depending on your exact backend mapping
   product_name: string;
   sku: string;
   category: string;
   total_quantity: number;
   unit_type: string;
-  avg_cost_price: number; // Backend usually calculates weighted average
-  total_value: number;    // total_quantity * avg_cost_price
+  avg_cost_price: number;
+  total_value: number;
   low_stock_threshold: number;
 }
 
-interface StockLog {
-  id: number;
-  created_at: string;
-  product_name: string;
-  change_type: 'SALE' | 'RECEIVE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT';
-  quantity_change: number; // e.g., +50 or -5
-  performed_by: string;
-  notes?: string;
+
+
+interface InventoryLog {
+            id: number;
+            date: string;
+            product_name: string; 
+            branch_name: string, 
+            user_name: string, 
+            transaction_type: string, 
+            reason: string; 
+            quantity: number; 
+            total_value: number; 
+            notes?: string;
 }
 
 const InventoryManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'STOCK' | 'LOGS'>('STOCK');
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [logs, setLogs] = useState<StockLog[]>([]);
+  const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Dashboard Metrics
@@ -38,177 +43,147 @@ const InventoryManagement: React.FC = () => {
   const branchId = localStorage.getItem('branchId');
 
   useEffect(() => {
-    fetchData();
-  }, [activeTab]);
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      if (activeTab === 'STOCK') {
-        const res = await api.get(`inventory/levels/${branchId}`); // Aggregated View
-        setInventory(res.data);
-      } else {
-        const res = await api.get('/inventory/logs?limit=50'); // Audit Trail
-        setLogs(res.data);
+    const fetchAllData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch both stock and logs simultaneously
+        const [stockRes, logsRes] = await Promise.all([
+          api.get(`/inventory/levels/${branchId}`),
+          api.get('/inventory/logs?limit=50')
+        ]);
+        setInventory(stockRes.data);
+        setLogs(logsRes.data);
+      } catch (err) {
+        console.error("Failed to fetch inventory data", err);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to fetch inventory data", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+
+    fetchAllData();
+  }, [branchId]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 max-w-[1400px] mx-auto">
       {/* --- HEADER & METRICS --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="text-sm font-medium text-gray-500">Total Inventory Value</div>
-          <div className="text-2xl font-bold text-gray-900 mt-2">₦{totalValue.toLocaleString()}</div>
-          <div className="text-xs text-green-600 mt-1">Based on Avg Cost Price</div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-sm font-bold text-gray-500 uppercase tracking-wider">Total Inventory Value</div>
+          <div className="text-3xl font-black text-gray-900 mt-2">₦{totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+          <div className="text-xs text-green-600 mt-2 font-medium">Based on Avg Cost Price</div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="text-sm font-medium text-gray-500">Low Stock Alerts</div>
-          <div className="text-2xl font-bold text-gray-900 mt-2">{lowStockCount}</div>
-          <div className="text-xs text-gray-500 mt-1">Items below threshold</div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-sm font-bold text-gray-500 uppercase tracking-wider">Low Stock Alerts</div>
+          <div className="text-3xl font-black text-red-600 mt-2">{lowStockCount}</div>
+          <div className="text-xs text-gray-500 mt-2 font-medium">Items below threshold</div>
         </div>
 
-        <div className="bg-blue-50 p-6 rounded-lg border border-blue-100 flex flex-col justify-center items-start">
-          <h3 className="font-bold text-blue-900 mb-2">Quick Actions</h3>
-          <div className="flex space-x-3 text-sm">
-            <Link to="/admin/inventory/receive" className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">
-              + Receive Stock
+        <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 flex flex-col justify-center items-start shadow-sm">
+          <h3 className="font-bold text-blue-900 mb-3 uppercase tracking-wider text-sm">Quick Actions</h3>
+          <div className="flex flex-wrap gap-2 text-sm font-bold">
+            <Link to="/admin/inventory/receive" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm transition-colors">
+              + Receive
             </Link>
-            <Link to="/admin/products" className="bg-white text-blue-700 border border-blue-200 px-3 py-1.5 rounded hover:bg-gray-50">
-              Manage Catalog
+            <Link to="/admin/inventory/remove" className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-100 shadow-sm transition-colors">
+              - Remove
+            </Link>
+            <Link to="/admin/products" className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">
+              Catalog
             </Link>
           </div>
         </div>
       </div>
 
-      {/* --- TABS --- */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('STOCK')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'STOCK' 
-                ? 'border-blue-500 text-blue-600' 
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Current Stock Levels
-          </button>
-          <button
-            onClick={() => setActiveTab('LOGS')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'LOGS' 
-                ? 'border-blue-500 text-blue-600' 
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Movement History (Logs)
-          </button>
-        </nav>
-      </div>
+      {/* --- MAIN LAYOUT (STOCK LEFT, LOGS RIGHT) --- */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        
+        {/* LEFT COLUMN: STOCK TABLE */}
+        <div className="flex-1 w-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-100 bg-gray-50">
+            <h3 className="font-black text-gray-800">Current Stock Levels</h3>
+          </div>
+          {isLoading ? (
+             <div className="p-12 text-center text-gray-500 flex justify-center items-center">
+                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+                 Loading stock...
+             </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-white">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Product</th>
+                    <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Available</th>
+                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Value</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {inventory.map((item) => (
+                    <tr key={item.id} className="hover:bg-blue-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-bold text-gray-900">{item.product_name}</div>
+                        <div className="text-xs text-gray-400 font-mono mt-0.5">SKU: {item.sku}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className={`text-sm font-black ${item.total_quantity <= item.low_stock_threshold ? 'text-red-600' : 'text-gray-900'}`}>
+                            {item.total_quantity}
+                          </span>
+                          {item.total_quantity <= item.low_stock_threshold && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase">Low</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-700">
+                        ₦{Number(item.total_value).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-      {/* --- MAIN CONTENT AREA --- */}
-      <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-        {isLoading ? (
-           <div className="p-12 text-center text-gray-500">Loading data...</div>
-        ) : activeTab === 'STOCK' ? (
-          
-          /* STOCK TABLE */
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product Details</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available Qty</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Asset Value</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {inventory.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{item.product_name}</div>
-                    <div className="text-xs text-gray-500 font-mono">SKU: {item.sku}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                      {item.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <span className={`text-sm font-bold mr-2 ${
-                        item.total_quantity <= item.low_stock_threshold ? 'text-red-600' : 'text-gray-900'
+        {/* RIGHT COLUMN: LOGS SIDEBAR */}
+        <div className="w-full lg:w-[400px] shrink-0 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-[600px]">
+          <div className="p-4 border-b border-gray-100 bg-gray-50 sticky top-0">
+            <h3 className="font-black text-gray-800">Recent Activity</h3>
+          </div>
+          <div className="overflow-y-auto flex-1 p-4 space-y-4">
+            {isLoading ? (
+                <div className="text-center text-sm text-gray-400 mt-10">Loading logs...</div>
+            ) : logs.length === 0 ? (
+                <div className="text-center text-sm text-gray-400 mt-10">No recent stock movements.</div>
+            ) : (
+                logs.map((log) => (
+                  <div key={log.id} className="p-3 border border-gray-100 rounded-lg bg-gray-50 hover:bg-white transition-colors">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-sm tracking-wider ${
+                        log.quantity > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                       }`}>
-                        {item.total_quantity}
+                        {log.transaction_type}
                       </span>
-                      <span className="text-xs text-gray-500">{item.unit_type}</span>
-                      {item.total_quantity <= item.low_stock_threshold && (
-                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                          Low
-                        </span>
-                      )}
+                      <span className="text-[10px] text-gray-400 font-medium">
+                        {new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    ₦{Number(item.total_value).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <div className="text-sm font-bold text-gray-800 mb-1 line-clamp-1">{log.product_name}</div>
+                    <div className="flex justify-between items-end">
+                      <div className="text-xs text-gray-500 max-w-[70%] line-clamp-1">
+                         {log.notes || 'No notes attached.'}
+                      </div>
+                      <div className={`text-sm font-black ${log.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {log.quantity > 0 ? '+' : ''}{log.quantity}
+                      </div>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
+        </div>
 
-        ) : (
-
-          /* LOGS TABLE */
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date/Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Change</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">User</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(log.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      log.change_type === 'SALE' ? 'bg-green-100 text-green-800' :
-                      log.change_type === 'RECEIVE' ? 'bg-blue-100 text-blue-800' :
-                      log.change_type === 'ADJUSTMENT' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {log.change_type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {log.product_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                    <span className={log.quantity_change > 0 ? 'text-green-600' : 'text-red-600'}>
-                      {log.quantity_change > 0 ? '+' : ''}{log.quantity_change}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                    {log.performed_by}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </div>
     </div>
   );

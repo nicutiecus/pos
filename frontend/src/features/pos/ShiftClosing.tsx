@@ -114,7 +114,7 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
       {/* HEADER */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
         <div>
-            <h1 className="text-2xl font-bold text-gray-800">End of Day / Z-Report</h1>
+            <h1 className="text-2xl font-bold text-gray-800">End of Shift/Day / Z-Report</h1>
             <p className="text-sm text-gray-500">Reconcile your cash drawer and close your session.</p>
         </div>
         <div className="flex items-center gap-6">

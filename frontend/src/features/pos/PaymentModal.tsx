@@ -163,7 +163,7 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
         items: cartItems.map(item => ({
             product_id: item.id, // FIX 3: Changed from item.product_id to fix TS Error
             quantity: item.quantity,
-            unit_price: item.price
+            unit_price: Number( item.price)
         }))
     };
 

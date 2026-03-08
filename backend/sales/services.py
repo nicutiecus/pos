@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
 from common.models import Branch
-from inventory.models import Product, InventoryBatch
+from inventory.models import Product, InventoryBatch, InventoryLog
 from sales.models import SalesOrder, SaleItem, Payment, Customer, CustomerLedger
 import random
 import string
@@ -143,6 +143,19 @@ def create_sale_service(
             # Check if we successfully fulfilled the demand
             if qty_needed > 0:
                 raise ValidationError(f"Insufficient stock for {product.name}. Shortage: {qty_needed}")
+            
+            #add to Inventory Log
+            InventoryLog.objects.create(
+            tenant=user.tenant,
+            branch_id=branch_id,
+            product_id=product.id,
+            user=user,
+            transaction_type=InventoryLog.TransactionType.SALE,
+            quantity=-item_data['quantity'], # Negative because stock is leaving
+            reason="Sale", # Or leave blank, as TransactionType implies it
+            total_value=item_data['quantity'] * product.selling_price, # Revenue generated
+            notes=f"Sold on Receipt #{order.id}" 
+            )
 
         if discount_amount > calculated_subtotal:
             raise ValidationError("Discount amount cannot be greater than the subtotal.")

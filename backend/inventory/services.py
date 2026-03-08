@@ -1,7 +1,8 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from common.models import Branch
-from .models import Product, InventoryBatch, Category, StockTransferLog, ProductPriceHistory
+from .models import (Product, InventoryBatch, Category,
+                      StockTransferLog, ProductPriceHistory, InventoryLog)
 from decimal import Decimal
 import random
 import string
@@ -48,6 +49,17 @@ def receive_stock_service(
             created_batches.append(batch)
             
             # Optional: Log this action in a 'StockMovementLog' table here
+            for item in items:
+                InventoryLog.objects.create(
+                tenant=user.tenant,
+                branch_id=branch_id,
+                product_id=item['product_id'],
+                user=user,
+                transaction_type=InventoryLog.TransactionType.ADDITION,
+                quantity=item['quantity'], # Positive because stock is arriving
+                total_value=item['quantity'] * item['cost_price'], # Cost of goods received
+                notes=notes
+            )
             
 
     return created_batches
@@ -259,3 +271,58 @@ def update_product_price_service(*, user, product_id: str, new_price) -> Product
         )
 
     return product
+
+
+
+
+@transaction.atomic
+def remove_stock_service(*, user, product_id, branch_id, quantity, reason, notes=""):
+    
+    # 1. Fetch active batches for this product, oldest first (FIFO)
+    batches = InventoryBatch.objects.select_for_update().filter(
+        tenant=user.tenant,
+        branch_id=branch_id,
+        product_id=product_id,
+        quantity_on_hand__gt=0
+    ).order_by('created_at')
+
+    total_available = sum(batch.quantity_on_hand for batch in batches)
+    
+    if quantity > total_available:
+        raise ValidationError(f"Cannot remove {quantity}. Only {total_available} available in stock.")
+
+    remaining_to_remove = quantity
+    financial_loss_value = Decimal('0.00')
+
+    # 2. Deduct stock across batches
+    for batch in batches:
+        if remaining_to_remove <= 0:
+            break
+
+        if batch.quantity_on_hand >= remaining_to_remove:
+            # This batch can fulfill the rest of the removal
+            financial_loss_value += remaining_to_remove * batch.cost_price_at_receipt
+            batch.quantity_on_hand -= remaining_to_remove
+            batch.save()
+            remaining_to_remove = Decimal('0.00')
+        else:
+            # Exhaust this batch completely and move to the next
+            financial_loss_value += batch.quantity_on_hand * batch.cost_price_at_receipt
+            remaining_to_remove -= batch.quantity_on_hand
+            batch.quantity_on_hand = Decimal('0.00')
+            batch.save()
+
+    # 3. Create the Audit Log entry
+    InventoryLog.objects.create(
+        tenant=user.tenant,
+        branch_id=branch_id,
+        product_id=product_id,
+        user=user,
+        transaction_type=InventoryLog.TransactionType.REMOVAL,
+        quantity=-quantity, # Stored as a negative number for easy ledger math later
+        reason=reason,
+        total_value=financial_loss_value,
+        notes=notes
+    )
+
+    return True

@@ -67,6 +67,33 @@ class InventoryBatch(TenantAwareModel):
     class Meta:
         db_table = 'inventory_batches'
 
+class InventoryLog(TenantAwareModel):
+    class TransactionType(models.TextChoices):
+        ADDITION = 'Addition', 'Addition'
+        REMOVAL = 'Removal', 'Removal'
+        SALE = 'Sale', 'Sale'
+        TRANSFER= 'Transfer', 'Transfer'
+
+    class RemovalReason(models.TextChoices):
+        DAMAGED = 'Damaged', 'Damaged'
+        EXPIRED = 'Expired', 'Expired'
+        INTERNAL_USE = 'Internal Use', 'Internal Use'
+        THEFT = 'Theft', 'Theft'
+        OTHER = 'Other', 'Other'
+
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    
+    transaction_type = models.CharField(max_length=20, choices=TransactionType.choices)
+    reason = models.CharField(max_length=50, choices=RemovalReason.choices, null=True, blank=True)
+    
+    quantity = models.DecimalField(max_digits=10, decimal_places=2) # Will be negative for removals
+    total_value = models.DecimalField(max_digits=12, decimal_places=2, default=0) # Financial cost of the removal
+    notes = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
 class StockTransfer(TenantAwareModel):
     """
     Headquarters logic for moving stock between branches.
@@ -127,3 +154,4 @@ class ProductPriceHistory(TenantAwareModel):
 
     def __str__(self):
         return f"{self.product.name}: {self.old_price} -> {self.new_price}"
+

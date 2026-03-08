@@ -19,6 +19,8 @@ import AdminDashboard from '../features/admin-dash/AdminDashboard';
 import POSOnboardingWizard from '../features/onboarding/Onboarding';
 import BranchManagement from '../features/admin-dash/BranchManagement';
 import UserManagement from '../features/admin-dash/UserManagement';
+
+//Inventory
 import ProductCatalog from '../features/inventory/ProductCatalog';
 import ProductList from '../features/inventory/ProductList';
 import InventoryReceiving from '../features/inventory/InventoryReceiving';
@@ -27,6 +29,8 @@ import CategoryManagement from '../features/inventory/CategoryManagement';
 import InventoryManagement from '../features/inventory/InventoryManagement';
 import CustomerManagement from '../features/customers/CustomerManagement';
 import OrganizationInventory from '../features/inventory/OrganizationInventory';
+import StockRemoval from '../features/inventory/StockRemoval';
+import InventoryLogs from '../features/inventory/InventoryLogs';
 //new transfer form
 import StockTransfers from '../features/inventory/transfers/StockTransfers';
 // import POS
@@ -37,6 +41,7 @@ import ExpenseManagement from '../features/finances/ExpenseManagement';
 //Reports
 import ProfitReport from '../features/reports/ProfitReport';
 import ReportsDashboard from '../features/reports/ReportsDashboard';
+
 
 
 
@@ -66,7 +71,9 @@ const AppRouter: React.FC = () => {
             <Route index element={<Navigate to ='dashboard'/>} /> {/* Matches /admin */}
             <Route path="organization-stock" element={<OrganizationInventory/>}/>
             <Route path="inventory" element={<InventoryManagement/>} />
+            <Route path="inventory-logs" element={<InventoryLogs/>} />
             <Route path="inventory/receive" element={<InventoryReceiving/>}/>
+            <Route path="inventory/remove" element={<StockRemoval/>}/>
             <Route path="branches" element={<BranchManagement />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="products" element={<ProductList />} />

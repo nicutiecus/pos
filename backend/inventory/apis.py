@@ -3,10 +3,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            CategorySerializer, InventoryLogSerializer, UpdateProductPriceSerializer,
-                           StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer)
+                           StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer,
+                           RemoveStockSerializer)
 from .services import (receive_stock_service, create_product_service, 
                        create_category_service, accept_transfer_service, initiate_transfer_service,
-                       reject_transfer_service, update_product_price_service)
+                       reject_transfer_service, update_product_price_service, remove_stock_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
                         get_product_price_history, get_organization_stock_levels
@@ -15,6 +16,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from .models import StockTransferLog
 
 from rest_framework.views import APIView
+
 
 
 
@@ -243,6 +245,35 @@ class RejectTransferApi(views.APIView):
         
 
 
+class RemoveStockAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = RemoveStockSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            # Extract validated data
+            data = serializer.validated_data
+            
+            remove_stock_service(
+                user=request.user,
+                product_id=data['product_id'],
+                branch_id=data['branch_id'],
+                quantity=data['quantity'],
+                reason=data['reason'],
+                notes=data.get('notes', '')
+            )
+            
+            return Response(
+                {"message": "Stock successfully removed and logged."}, 
+                status=status.HTTP_200_OK
+            )
+            
+        except ValidationError as e:
+            error_msg = e.message if hasattr(e, 'message') else str(e)
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+
 class UpdateProductPriceApi(views.APIView):
     permission_classes = [IsAuthenticated]
 
@@ -301,3 +332,4 @@ class OrganizationStockLevelsAPIView(APIView):
         data = get_organization_stock_levels(user=user)
         
         return Response(data)
+    

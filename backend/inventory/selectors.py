@@ -1,7 +1,9 @@
 from django.db.models import Sum, F, Q
 from django.utils import timezone
-from .models import InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory
+from .models import InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory, InventoryLog
 from django.core.exceptions import PermissionDenied
+from django.core.cache import cache
+from .serializers import ProductCatalogSerializer # We use the serializer here now
 
 
 
@@ -124,9 +126,9 @@ def get_categories(*, user) -> list[Category]:
 
 def get_inventory_logs(*, user, branch_id=None):
     """
-    Returns a history of all stock received (Inventory Batches).
+    Returns a history of all stock movement
     """
-    query = InventoryBatch.objects.filter(tenant=user.tenant).select_related(
+    query = InventoryLog.objects.filter(tenant=user.tenant).select_related(
         'product', 'branch'
     ).order_by('-created_at')
 
@@ -138,10 +140,7 @@ def get_inventory_logs(*, user, branch_id=None):
 
     return query
 
-# inventory/selectors.py
-from django.core.cache import cache
-from .models import Product
-from .serializers import ProductCatalogSerializer # We use the serializer here now
+
 
 def get_product_catalog(*, user):
     """

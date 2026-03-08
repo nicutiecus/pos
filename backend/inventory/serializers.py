@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category, InventoryBatch, StockTransferLog, ProductPriceHistory
+from .models import Product, Category, InventoryBatch, StockTransferLog, ProductPriceHistory, InventoryLog
 
 
 class StockReceiveItemSerializer(serializers.Serializer):
@@ -63,17 +63,39 @@ class CategorySerializer(serializers.ModelSerializer):
 class InventoryLogSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     branch_name = serializers.CharField(source='branch.name', read_only=True)
-    received_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+    date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+    user_name = serializers.SerializerMethodField()
     
 
     class Meta:
-        model = InventoryBatch
+        model = InventoryLog
         fields = [
-            'id', 'branch_name', 'product_name', 'batch_number',
-            'quantity_on_hand', 'cost_price_at_receipt', 
-            'expiry_date', 'status', 'received_date', 'created_at'
+            'id', 
+            'date',
+            'product_name', 
+            'branch_name', 
+            'user_name', 
+            'transaction_type', 
+            'reason', 
+            'quantity', 
+            'total_value', 
+            'notes'
         ]
 
+    def get_user_name(self, obj):
+        if obj.user:
+            return obj.user.get_full_name() or obj.user.email
+        return "System"
+
+
+
+class RemoveStockSerializer(serializers.Serializer):
+    
+    product_id = serializers.IntegerField() 
+    branch_id = serializers.UUIDField()
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
+    reason = serializers.CharField(max_length=50)
+    notes = serializers.CharField(required=False, allow_blank=True)
 
 class ProductCatalogSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
@@ -99,7 +121,6 @@ class StockTransferSerializer(serializers.Serializer):
     quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
     notes = serializers.CharField(required=False, allow_blank=True)
 
-# inventory/serializers.py
 
 class StockTransferLogSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
