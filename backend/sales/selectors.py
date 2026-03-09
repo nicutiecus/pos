@@ -72,10 +72,10 @@ def get_current_shift_data(*, user):
     # Note: We use 'payments__method' to look into the related Payment model
     aggregates = sales_qs.aggregate(
         order_count=Count('id'),
-        expected_cash=Sum('total_amount', filter=Q(payments__method='Cash')),
-        expected_pos=Sum('total_amount', filter=Q(payments__method='POS')),
-        expected_transfer=Sum('total_amount', filter=Q(payments__method='Transfer')),
-        total_revenue=Sum('total_amount')
+        expected_cash=Sum('payments__amount', filter=Q(payments__method='Cash')),
+        expected_pos=Sum('payments__amount', filter=Q(payments__method='POS')),
+        expected_transfer=Sum('payments__amount', filter=Q(payments__method='Transfer')),
+        total_revenue=Sum('payments__amount')
     )
 
     # 4. Return the exact JSON dictionary your frontend requested
