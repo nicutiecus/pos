@@ -120,7 +120,7 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
         return;
     }
 
-    if (isCreditSale && selectedCustomer && (selectedCustomer.current_debt + balance > selectedCustomer.credit_limit)) {
+    if (isCreditSale && selectedCustomer && (Number(selectedCustomer.current_debt) + balance > Number(selectedCustomer.credit_limit))) {
         alert(`This credit sale exceeds ${selectedCustomer.name}'s credit limit of ₦${selectedCustomer.credit_limit.toLocaleString()}`);
         return;
     }
@@ -310,7 +310,19 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
                     <input 
                         type="checkbox" 
                         checked={isCreditSale} 
-                        onChange={(e) => setIsCreditSale(e.target.checked)}
+                        onChange={(e) => {
+                        const isCredit = e.target.checked;
+                        setIsCreditSale(isCredit);
+                        
+                        // Auto-clear the default cash amount so it doesn't send a ghost payment
+                        if (isCredit && paymentLines.length === 1 && paymentLines[0].amount === total) {
+                            setPaymentLines([{ ...paymentLines[0], amount: 0 }]);
+                        } 
+                        // Auto-restore the cash amount if they uncheck it
+                        else if (!isCredit && paymentLines.length === 1 && paymentLines[0].amount === 0) {
+                            setPaymentLines([{ ...paymentLines[0], amount: total }]);
+                        }
+                        }}
                         className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                     />
                     <span className="text-sm font-bold text-gray-700">Credit Sale</span>

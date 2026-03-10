@@ -71,7 +71,7 @@ def get_current_shift_data(*, user):
     # 3. Calculate totals using Django's database aggregation
     # Note: We use 'payments__method' to look into the related Payment model
     aggregates = sales_qs.aggregate(
-        order_count=Count('id'),
+        order_count=Count('id', distinct=True),
         expected_cash=Sum('payments__amount', filter=Q(payments__method='Cash')),
         expected_pos=Sum('payments__amount', filter=Q(payments__method='POS')),
         expected_transfer=Sum('payments__amount', filter=Q(payments__method='Transfer')),

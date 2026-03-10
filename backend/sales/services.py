@@ -61,6 +61,7 @@ def create_sale_service(
         order = SalesOrder.objects.create(
             tenant=user.tenant,
             branch=branch,
+            #shift=active_shift,
             customer=customer,
             user=user,
             total_amount=Decimal('0.00'),
@@ -189,7 +190,7 @@ def create_sale_service(
         order.amount_paid = total_paid
 
         # Calculate Debt & Validate Credit Rules
-        debt_amount = total_order_amount - total_paid
+        debt_amount = final_total_amount - total_paid
 
         # Validation: Walk-in customers MUST pay in full
         if debt_amount > 0 and not customer:
