@@ -10,12 +10,14 @@ from .services import (receive_stock_service, create_product_service,
                        reject_transfer_service, update_product_price_service, remove_stock_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
-                        get_product_price_history, get_organization_stock_levels
+                        get_product_price_history, get_organization_stock_levels, get_inventory_batches
                         )
 from django.core.exceptions import PermissionDenied, ValidationError
 from .models import StockTransferLog
 
 from rest_framework.views import APIView
+
+from .serializers import InventoryBatchSerializer
 
 
 
@@ -333,3 +335,25 @@ class OrganizationStockLevelsAPIView(APIView):
         
         return Response(data)
     
+
+
+class InventoryBatchListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Extract optional query parameters
+        branch_id = request.query_params.get('branch_id')
+        
+        # Default to only showing batches that actually have stock
+        active_only_param = request.query_params.get('active_only', 'true').lower()
+        active_only = active_only_param == 'true'
+
+        # Fetch and serialize
+        batches = get_inventory_batches(
+            user=request.user, 
+            branch_id=branch_id, 
+            active_only=active_only
+        )
+        
+        serializer = InventoryBatchSerializer(batches, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

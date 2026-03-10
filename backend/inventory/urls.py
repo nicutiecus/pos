@@ -3,10 +3,11 @@ from .apis import (StockReceiveApi, StockLevelApi, InventoryLogListApi,
                    ExpiringStockApi, ProductCreateApi, CategoryListCreateApi, ProductCatalogApi,
                    StockTransferApi, StockTransferLogListApi, AcceptTransferApi, RejectTransferApi,
                    UpdateProductPriceApi, ProductPriceHistoryApi, OrganizationStockLevelsAPIView,
-                   RemoveStockAPIView)
+                   RemoveStockAPIView, InventoryBatchListAPIView)
 
 urlpatterns = [
     path('receive/', StockReceiveApi.as_view(), name='stock-receive'),
+    path('batches/', InventoryBatchListAPIView.as_view(), name='inventory-batches'),
     path('remove/', RemoveStockAPIView.as_view(), name='stock-remove'),
     path('levels/organization/', OrganizationStockLevelsAPIView.as_view(), name='stock-levels'),
     path('levels/<uuid:branch_id>/', StockLevelApi.as_view(), name='stock-levels'),

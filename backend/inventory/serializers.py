@@ -149,3 +149,26 @@ class ProductPriceHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductPriceHistory
         fields = ['id', 'old_price', 'new_price', 'changed_by_name', 'created_at']
+
+
+
+
+class InventoryBatchSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_sku = serializers.CharField(source='product.sku', read_only=True)
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+    
+    class Meta:
+        model = InventoryBatch
+        fields = [
+            'id', 
+            'product_name', 
+            'product_sku',
+            'branch_name', 
+            'batch_number', 
+            'quantity_on_hand', 
+            'cost_price_at_receipt', 
+            'expiry_date', 
+            'status', 
+            'created_at'
+        ]

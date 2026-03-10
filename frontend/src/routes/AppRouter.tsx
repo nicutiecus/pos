@@ -31,6 +31,7 @@ import CustomerManagement from '../features/customers/CustomerManagement';
 import OrganizationInventory from '../features/inventory/OrganizationInventory';
 import StockRemoval from '../features/inventory/StockRemoval';
 import InventoryLogs from '../features/inventory/InventoryLogs';
+import InventoryBatches from '../features/inventory/InventoryBatches';
 //new transfer form
 import StockTransfers from '../features/inventory/transfers/StockTransfers';
 // import POS
@@ -70,6 +71,7 @@ const AppRouter: React.FC = () => {
         {/* Default admin page redirects to branches for now */}
             <Route index element={<Navigate to ='dashboard'/>} /> {/* Matches /admin */}
             <Route path="organization-stock" element={<OrganizationInventory/>}/>
+            <Route path="inventory-batches" element={<InventoryBatches/>} />
             <Route path="inventory" element={<InventoryManagement/>} />
             <Route path="inventory-logs" element={<InventoryLogs/>} />
             <Route path="inventory/receive" element={<InventoryReceiving/>}/>

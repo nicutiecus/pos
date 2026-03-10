@@ -202,3 +202,33 @@ def get_product_price_history(*, user, product_id: str):
         tenant=user.tenant,
         product_id=product_id
     ).select_related('changed_by').order_by('-created_at')
+
+
+from .models import InventoryBatch
+
+def get_inventory_batches(*, user, branch_id=None, active_only=True):
+    """
+    Fetches inventory batches. 
+    By default, only returns active batches (quantity > 0).
+    Sorted by expiry date to support FIFO visibility.
+    """
+    query = InventoryBatch.objects.filter(
+        tenant=user.tenant
+    ).select_related('product', 'branch')
+
+    # Optional: Filter out empty batches so the UI isn't cluttered
+    if active_only:
+        query = query.filter(quantity_on_hand__gt=0)
+
+    # 🔒 Security: Isolate data based on role
+    admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+    
+    if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
+        # Cashiers/Staff only see their assigned branch
+        query = query.filter(branch_id=user.branch_id)
+    elif branch_id:
+        # Admins can filter by a specific branch
+        query = query.filter(branch_id=branch_id)
+
+    # Sort by nearest expiry date first, then by creation date
+    return query.order_by('expiry_date', 'created_at')
