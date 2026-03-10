@@ -45,6 +45,9 @@ const AdminLayout: React.FC = () => {
             {/* Expanded Links */}
             {isInventoryOpen && (
               <div className="flex flex-col mt-1 ml-4 pl-2 border-l-2 border-gray-700 space-y-1 animate-fade-in">
+                <Link to="/admin/inventory-batches" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                  Inventory Batches
+                </Link>
                 <Link to="/admin/inventory" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                   Branch Stock
                 </Link>
