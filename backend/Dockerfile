@@ -22,3 +22,12 @@ RUN pip install -r requirements.txt
 
 # Copy the rest of the project code
 COPY . /app/
+
+# 1. Provide dummy variables so settings.py doesn't crash during the build
+ARG SECRET_KEY="dummy-key-for-build"
+ARG DEBUG="True"
+# (If settings.py strictly requires a DATABASE_URL to even load)
+# ARG DATABASE_URL="sqlite:////tmp/db.sqlite3"
+
+# 2. Collect the static files into STATIC_ROOT
+RUN python manage.py collectstatic --noinput
