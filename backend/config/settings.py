@@ -15,7 +15,9 @@ from datetime import timedelta
 import os
 import dj_database_url
 from dotenv import load_dotenv # or import environ
+import environ
 
+env =environ.Env()
 # This line is crucial to load the file into Python's os.environ
 load_dotenv()
 
@@ -30,9 +32,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-s(4%^)gy)gl(+)stqr%_drut0_q#z(i_-lgrxpy6fvf&zf=10^'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG')
+DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = [os.environ.get('ALLOWED_HOSTS') ]
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
 
 # Application definition
@@ -95,11 +97,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # This tells Django to use the DATABASE_URL environment variable if it exists,
 # and if it doesn't (like on your local laptop), fall back to SQLite.
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3'),
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+    'default': env.db('DATABASE_URL', 'sqlite:///db.sqlite3'),
 }
 
 
