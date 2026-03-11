@@ -26,9 +26,11 @@ interface PaymentLine {
   reference?: string;
 }
 
-const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
+const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => {
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(state => state.cart.items);
+
+    const finalTotal = total - discountAmount;
 
   // --- State ---
   // Customer Search & Selection
@@ -42,13 +44,13 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '' });
   
   // Payments
-  const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([{ method: 'Cash', amount: total }]);
+  const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([{ method: 'Cash', amount: finalTotal }]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCreditSale, setIsCreditSale] = useState(false);
 
   // --- Calculations ---
   const totalPaid = paymentLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
-  const balance = total - totalPaid;
+  const balance = finalTotal - totalPaid;
 
   // --- Fetch Customers ---
   useEffect(() => {
@@ -300,7 +302,7 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
             <div className="bg-gray-900 text-white p-6 rounded-2xl mb-6 shadow-md flex justify-between items-center">
                 <div>
                     <div className="text-gray-400 font-bold text-sm uppercase tracking-widest mb-1">Total Due</div>
-                    <div className="text-5xl font-black tracking-tight">₦{total.toLocaleString()}</div>
+                    <div className="text-5xl font-black tracking-tight">₦{finalTotal.toLocaleString()}</div>
                 </div>
             </div>
 
@@ -315,12 +317,12 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount, onClose }) => {
                         setIsCreditSale(isCredit);
                         
                         // Auto-clear the default cash amount so it doesn't send a ghost payment
-                        if (isCredit && paymentLines.length === 1 && paymentLines[0].amount === total) {
+                        if (isCredit && paymentLines.length === 1 && paymentLines[0].amount === finalTotal) {
                             setPaymentLines([{ ...paymentLines[0], amount: 0 }]);
                         } 
                         // Auto-restore the cash amount if they uncheck it
                         else if (!isCredit && paymentLines.length === 1 && paymentLines[0].amount === 0) {
-                            setPaymentLines([{ ...paymentLines[0], amount: total }]);
+                            setPaymentLines([{ ...paymentLines[0], amount: finalTotal }]);
                         }
                         }}
                         className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"

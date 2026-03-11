@@ -12,6 +12,7 @@ from .selectors import get_current_shift_data
 
 
 
+
 def generate_receipt_ref(transaction_type):
     """Generates a short, unique reference like PAY-8X92B"""
     suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
@@ -50,8 +51,10 @@ def create_sale_service(
         if not customer:
             raise ValidationError("Invalid customer.")
         
+    
+        
     # Convert discount to Decimal to ensure accurate math
-    discount_amount = Decimal(str(discount_amount))
+    # = Decimal(str(discount_amount))
     if discount_amount < 0:
         raise ValidationError("Discount cannot be negative.")
 

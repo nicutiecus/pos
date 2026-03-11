@@ -101,7 +101,7 @@ const CartSidebar: React.FC = () => {
             onClick={() => setPaymentModalOpen(true)}
             className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-700 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-transform active:scale-95"
           >
-            Pay ₦{totalAmount.toLocaleString()}
+            Pay ₦{finalTotal.toLocaleString()}
           </button>
         </div>
       </div>
@@ -109,7 +109,8 @@ const CartSidebar: React.FC = () => {
       {/* Payment Modal Popup */}
       {isPaymentModalOpen && (
         <PaymentModal 
-          total={totalAmount} 
+          total={totalAmount}
+          discountAmount={safeDiscount}
           onClose={() => setPaymentModalOpen(false)} 
         />
       )}

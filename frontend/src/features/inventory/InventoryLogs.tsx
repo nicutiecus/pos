@@ -7,12 +7,12 @@ interface InventoryLog {
   id: string | number;
   product_name: string;
   branch_name: string;
-  change_type: 'ADD' | 'REMOVE' | 'SALE' | 'TRANSFER' | 'RETURN';
-  quantity_changed: number;
+  transaction_type: 'ADD' | 'REMOVE' | 'SALE' | 'TRANSFER' | 'RETURN';
+  quantity: number;
   previous_stock: number;
   new_stock: number;
   reason: string;
-  created_at: string;
+  date: string;
   user_name: string;
 }
 
@@ -139,8 +139,8 @@ const InventoryLogs: React.FC = () => {
                   filteredLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-blue-50/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        <div>{new Date(log.created_at).toLocaleDateString()}</div>
-                        <div className="text-xs text-gray-400">{new Date(log.created_at).toLocaleTimeString()}</div>
+                        <div>{new Date(log.date).toLocaleDateString()}</div>
+                        <div className="text-xs text-gray-400">{new Date(log.date).toLocaleTimeString()}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900">{log.product_name}</div>
@@ -148,17 +148,17 @@ const InventoryLogs: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                          log.change_type === 'ADD' ? 'bg-green-100 text-green-700' :
-                          log.change_type === 'SALE' ? 'bg-blue-100 text-blue-700' :
-                          log.change_type === 'REMOVE' ? 'bg-red-100 text-red-700' :
+                          log.transaction_type === 'ADD' ? 'bg-green-100 text-green-700' :
+                          log.transaction_type === 'SALE' ? 'bg-blue-100 text-blue-700' :
+                          log.transaction_type === 'REMOVE' ? 'bg-red-100 text-red-700' :
                           'bg-gray-100 text-gray-700'
                         }`}>
-                          {log.change_type}
+                          {log.transaction_type}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-black">
-                        <span className={log.quantity_changed > 0 ? 'text-green-600' : 'text-red-600'}>
-                          {log.quantity_changed > 0 ? '+' : ''}{log.quantity_changed}
+                        <span className={log.quantity > 0 ? 'text-green-600' : 'text-red-600'}>
+                          {log.quantity > 0 ? '+' : ''}{log.quantity}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
@@ -201,7 +201,7 @@ const InventoryLogs: React.FC = () => {
                 </div>
                 <div>
                   <span className="block text-xs font-bold text-gray-400 uppercase">Type</span>
-                  <span className="font-semibold text-gray-800">{editingLog.change_type} ({editingLog.quantity_changed > 0 ? '+' : ''}{editingLog.quantity_changed})</span>
+                  <span className="font-semibold text-gray-800">{editingLog.transaction_type} ({editingLog.quantity > 0 ? '+' : ''}{editingLog.quantity})</span>
                 </div>
               </div>
 
