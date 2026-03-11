@@ -236,7 +236,7 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
       )}
 
       {/* --- HIDDEN THERMAL RECEIPT FOR PRINTING --- */}
-      <div style={{ display: 'none' }}>
+      <div style={{ position: 'absolute', top : '-9999px', left: '-9999px' }}>
         <div ref={printRef} className="p-4 text-black bg-white" style={{ width: '300px', fontFamily: 'monospace', fontSize: '12px' }}>
             <div className="text-center font-bold text-lg mb-1">{branchName}</div>
             <div className="text-center mb-4">END OF SHIFT (Z-REPORT)</div>

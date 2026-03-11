@@ -145,7 +145,7 @@ const SalesHistory: React.FC = () => {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Receipt #</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
               </tr>
@@ -164,13 +164,9 @@ const SalesHistory: React.FC = () => {
                       {formatBackendDate(sale.formatted_date, { hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                        sale.payment_method === 'Cash' ? 'bg-green-100 text-green-700 border-green-200' :
-                        sale.payment_method === 'POS' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                        'bg-purple-100 text-purple-700 border-purple-200'
-                      }`}>
-                        {sale.payment_method}
-                      </span>
+                      
+                        {sale.customer_name || "Walk-in"}
+                      
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-bold text-right">
                       ₦{Number(sale.total_amount).toLocaleString()}
