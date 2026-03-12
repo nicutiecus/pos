@@ -89,6 +89,7 @@ const AppRouter: React.FC = () => {
             <Route path="dashboard" element={<AdminDashboard/>}/>
             <Route path="transfer" element={<StockTransfers />} />
             <Route path="profit-report" element={<ProfitReport/>}/>
+            <Route path="expenses" element={<ExpenseManagement/>}/>
         </Route>
       </Route>
 

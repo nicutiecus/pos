@@ -11,7 +11,13 @@ class Expense(TenantAwareModel):
         SUPPLIES = 'Office Supplies', 'Office Supplies'
         OTHER = 'Other', 'Other'
 
-    branch = models.ForeignKey('common.Branch', on_delete=models.CASCADE, related_name='expenses')
+    class ExpenseScope(models.TextChoices):
+        BRANCH = 'Branch', 'Branch Expense'
+        CORPORATE = 'Corporate', 'Corporate/HQ Expense'
+    
+    scope = models.CharField(max_length=200, choices=ExpenseScope, default=ExpenseScope.BRANCH)
+
+    branch = models.ForeignKey('common.Branch', on_delete=models.CASCADE, related_name='expenses', null=True, blank=True)
     category = models.CharField(max_length=50, choices=Category.choices, default=Category.OTHER)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.TextField(null=True, blank=True)
@@ -23,6 +29,16 @@ class Expense(TenantAwareModel):
         related_name='approved_expenses'
     )
     expense_date = models.DateField(auto_now_add=True)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        
+        # 🛡️ Data Integrity Guards
+        if self.scope == self.ExpenseScope.BRANCH and not self.branch:
+            raise ValidationError("A branch must be selected for Branch-level expenses.")
+            
+        if self.scope == self.ExpenseScope.CORPORATE and self.branch:
+            raise ValidationError("Corporate expenses cannot be tied to a specific branch.")
 
     class Meta:
         db_table = 'expenses'
