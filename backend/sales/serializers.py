@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import ( Payment, SalesOrder, SaleItem, 
-                    Customer, CustomerLedger)
+                    Customer, CustomerLedger, ShiftReport)
 
 class SaleItemDetailSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
@@ -102,3 +102,37 @@ class CloseShiftSerializer(serializers.Serializer):
     expected_cash = serializers.DecimalField(max_digits=12, decimal_places=2)
     variance = serializers.DecimalField(max_digits=12, decimal_places=2)
     notes = serializers.CharField(required=False, allow_blank=True)
+
+
+
+class ShiftReportSerializer(serializers.ModelSerializer):
+    cashier_name = serializers.SerializerMethodField()
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+    
+    # Format timestamps nicely for the UI
+    formatted_start_time = serializers.DateTimeField(source='start_time', format="%d-%b-%Y %I:%M %p", read_only=True)
+    formatted_end_time = serializers.DateTimeField(source='end_time', format="%d-%b-%Y %I:%M %p", read_only=True)
+
+    class Meta:
+        model = ShiftReport
+        fields = [
+            'id', 
+            'shift_code', 
+            'branch_name', 
+            'cashier_name',
+            'formatted_start_time', 
+            'formatted_end_time', 
+            'status',
+            'order_count', 
+            'expected_cash', 
+            'declared_cash', 
+            'variance',
+            'expected_pos', 
+            'expected_transfer', 
+            'total_revenue'
+        ]
+
+    def get_cashier_name(self, obj):
+        if obj.cashier:
+            return obj.cashier.get_full_name() or obj.cashier.email
+        return "Unknown"

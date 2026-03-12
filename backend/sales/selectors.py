@@ -89,3 +89,60 @@ def get_current_shift_data(*, user):
         "expected_transfer": aggregates['expected_transfer'] or 0.00,
         "total_revenue": aggregates['total_revenue'] or 0.00
     }
+
+
+
+def get_shift_reports(*, user, branch_id=None, status='Closed', search_term=None):
+    """
+    Fetches shift reports based on status.
+    Cashiers only see their own shifts. Admins see all or filter by branch.
+    """
+    # Base query
+    query = ShiftReport.objects.filter(
+        tenant=user.tenant,
+        status=status
+    ).select_related('cashier', 'branch').order_by('-start_time')
+
+    # Security: Isolate data based on role
+    admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+    
+    if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
+        # Standard staff/cashiers only see their own shift history
+        query = query.filter(cashier=user)
+    elif branch_id:
+        # Admins can filter down to a specific branch's shifts
+        query = query.filter(branch_id=branch_id)
+    
+    if search_term:
+        query = query.filter(
+            Q(shift_code__icontains=search_term) |
+            Q(cashier__first_name__icontains=search_term) |
+            Q(cashier__last_name__icontains=search_term) |
+            Q(cashier__email__icontains=search_term)
+        )
+
+    return query
+
+
+from django.shortcuts import get_object_or_404
+from .models import ShiftReport # Ensure this is imported
+
+def get_shift_report_detail(*, user, shift_id):
+    """
+    Fetches a specific shift report by its ID or shift_code.
+    Enforces role-based security so cashiers can't snoop on other registers.
+    """
+    query = ShiftReport.objects.filter(
+        tenant=user.tenant
+    ).select_related('cashier', 'branch')
+
+    # Security: Isolate data based on role
+    admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+    
+    if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
+        # Cashiers can only view their own shifts
+        query = query.filter(cashier=user)
+
+    
+    # Fetch by the database ID (or change to shift_code if your frontend uses that in the URL)
+    return get_object_or_404(query, id=shift_id)

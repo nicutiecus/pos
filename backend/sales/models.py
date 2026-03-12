@@ -16,6 +16,10 @@ def generate_receipt_id():
 def generate_customer_id():
     return generate('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 6)
 
+def generate_shift_code():
+    pass
+    
+
 
 
 class Customer(TenantAwareModel):

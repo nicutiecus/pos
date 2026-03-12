@@ -6,6 +6,7 @@ const AdminLayout: React.FC = () => {
   
   // State to manage the Inventory dropdown
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isReportsOpen, setIsReportsOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -68,7 +69,42 @@ const AdminLayout: React.FC = () => {
           <Link to="/admin/branches" className="p-2 hover:bg-gray-800 rounded transition-colors">Branches</Link>
           <Link to="/admin/customers" className="p-2 hover:bg-gray-800 rounded transition-colors">Customers</Link>
           <Link to="/admin/users" className="p-2 hover:bg-gray-800 rounded transition-colors">Users & Roles</Link>
-          <Link to="/admin/reports" className="p-2 hover:bg-gray-800 rounded transition-colors">Reports</Link>
+          
+          {/* --- REPORTS DROPDOWN --- */}
+          <div className="flex flex-col">
+            <button 
+              onClick={() => setIsReportsOpen(!isReportsOpen)}
+              className="w-full p-2 hover:bg-gray-800 rounded flex justify-between items-center transition-colors outline-none"
+            >
+              <span className="font-medium">Reports</span>
+              <svg 
+                className={`w-4 h-4 transform transition-transform duration-200 ${isReportsOpen ? 'rotate-180' : ''}`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {/* Expanded Links */}
+            {isReportsOpen && (
+              <div className="flex flex-col mt-1 ml-4 pl-2 border-l-2 border-gray-700 space-y-1 animate-fade-in">
+                <Link to="/admin/shift-reports" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                 Cashier Shift Reports
+                </Link>
+                <Link to="" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                  End of Day Reports
+                </Link>
+                <Link to="" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                  Profit reports
+                </Link>
+                
+              </div>
+            )}
+          </div>
+          {/* --- END DROPDOWN --- */}
+
         </nav>
 
         <div className="p-4 border-t border-gray-800">

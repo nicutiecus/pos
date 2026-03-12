@@ -236,53 +236,60 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
       )}
 
       {/* --- HIDDEN THERMAL RECEIPT FOR PRINTING --- */}
-      <div style={{ position: 'absolute', top : '-9999px', left: '-9999px' }}>
-        <div ref={printRef} className="p-4 text-black bg-white" style={{ width: '300px', fontFamily: 'monospace', fontSize: '12px' }}>
+      {/* --- HIDDEN THERMAL RECEIPT FOR PRINTING --- */}
+      {/* Do NOT use display: none. This absolute positioning safely hides it while keeping it printable */}
+      <div className="absolute -left-[9999px] top-0 opacity-0 -z-50 pointer-events-none">
+        
+        {/* Notice we matched the width: '80mm' and Tailwind classes from your ReceiptTemplate! */}
+        <div ref={printRef} className="p-2 text-xs font-mono text-black bg-white" style={{ width: '80mm' }}>
             <div className="text-center font-bold text-lg mb-1">{branchName}</div>
             <div className="text-center mb-4">END OF SHIFT (Z-REPORT)</div>
             
-            <div className="border-b border-black border-dashed pb-2 mb-2">
-                <div>Date: {new Date().toLocaleDateString()}</div>
-                <div>Time: {new Date().toLocaleTimeString()}</div>
-                <div>Cashier: {userName}</div>
-                <div>Shift ID: {shiftData?.shift_id?.slice(0,8)}</div>
+            <div className="border-b border-black border-dashed pb-2 mb-2 text-[10px]">
+                <div className="flex justify-between"><span>Date:</span> <span>{new Date().toLocaleDateString()}</span></div>
+                <div className="flex justify-between"><span>Time:</span> <span>{new Date().toLocaleTimeString()}</span></div>
+                <div className="flex justify-between"><span>Cashier:</span> <span>{userName}</span></div>
+                <div className="flex justify-between"><span>Shift ID:</span> <span>{shiftData?.shift_id?.slice(0,8)}</span></div>
             </div>
 
-            <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1">
+            <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1 text-[10px]">
                 <div className="flex justify-between"><span>Total Orders:</span> <span>{shiftData?.order_count}</span></div>
-                <div className="flex justify-between"><span>Total Revenue:</span> <span>₦{Number(shiftData?.total_revenue).toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold text-sm mt-1">
+                    <span>Total Revenue:</span> 
+                    <span>₦{Number(shiftData?.total_revenue).toLocaleString()}</span>
+                </div>
             </div>
 
-            <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1">
+            <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1 text-[10px]">
                 <div className="font-bold mb-1">PAYMENT BREAKDOWN:</div>
                 <div className="flex justify-between"><span>POS/Card:</span> <span>₦{Number(shiftData?.expected_pos).toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>Transfer:</span> <span>₦{Number(shiftData?.expected_transfer).toLocaleString()}</span></div>
-                <div className="flex justify-between font-bold"><span>Expected Cash:</span> <span>₦{Number(shiftData?.expected_cash).toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold mt-1"><span>Expected Cash:</span> <span>₦{Number(shiftData?.expected_cash).toLocaleString()}</span></div>
             </div>
 
-            <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1">
+            <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1 text-[10px]">
                 <div className="flex justify-between font-bold"><span>Declared Cash:</span> <span>₦{Number(declaredCash).toLocaleString()}</span></div>
-                <div className="flex justify-between">
+                <div className="flex justify-between font-bold">
                     <span>Variance:</span> 
-                    <span className={discrepancy < 0 ? 'text-red-500' : ''}>
+                    <span>
                         {discrepancy > 0 ? '+' : ''}₦{discrepancy.toLocaleString()}
                     </span>
                 </div>
             </div>
 
             {notes && (
-                <div className="border-b border-black border-dashed pb-2 mb-2">
+                <div className="border-b border-black border-dashed pb-2 mb-2 text-[10px]">
                     <div className="font-bold">Notes:</div>
                     <div>{notes}</div>
                 </div>
             )}
 
             <div className="text-center mt-6 mb-2">_________________________</div>
-            <div className="text-center mb-6">Cashier Signature</div>
+            <div className="text-center mb-6 text-[10px]">Cashier Signature</div>
             
             <div className="text-center mt-6 mb-2">_________________________</div>
-            <div className="text-center">Manager Signature</div>
-            <div className="text-center mt-4 text-xs">Generated by Equest POS</div>
+            <div className="text-center text-[10px]">Manager Signature</div>
+            <div className="text-center mt-4 text-[8px] text-gray-500">Generated by Equest POS</div>
         </div>
       </div>
 

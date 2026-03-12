@@ -42,6 +42,7 @@ import ExpenseManagement from '../features/finances/ExpenseManagement';
 //Reports
 import ProfitReport from '../features/reports/ProfitReport';
 import ReportsDashboard from '../features/reports/ReportsDashboard';
+import AdminShiftReports from '../features/admin-dash/AdminShiftReports';
 
 
 
@@ -81,6 +82,7 @@ const AppRouter: React.FC = () => {
             <Route path="products" element={<ProductList />} />
             <Route path ="categories" element={<CategoryManagement/>}/>
             <Route path ="reports" element={<ReportsDashboard/>}/>
+             <Route path ="shift-reports" element={<AdminShiftReports/>}/>
             <Route path ="customers" element={<CustomerManagement/>}/>
             <Route path="dashboard" element={<AdminDashboard/>}/>
             <Route path="transfer" element={<StockTransfers />} />
