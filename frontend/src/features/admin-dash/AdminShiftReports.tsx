@@ -10,6 +10,8 @@ export interface AdminShiftReport {
   formatted_start_time: string;
   formatted_end_time: string;
   order_count: number;
+  expected_pos: number;
+  expected_transfer: number;
   total_revenue: number;
   expected_cash: number;
   declared_cash: number;
@@ -21,17 +23,20 @@ const AdminShiftReports: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Pagination State
+  // Pagination & Search State
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrev, setHasPrev] = useState(false);
-
-  // Search State
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
-  // --- Debounce Effect ---
-  // Waits 500ms after the user stops typing before locking in the search term
+  // --- NEW: Modal Fetching State ---
+  const [selectedShiftId, setSelectedShiftId] = useState<string | number | null>(null);
+  const [shiftDetails, setShiftDetails] = useState<any | null>(null);
+  const [isModalLoading, setIsModalLoading] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  // Search Debounce
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
@@ -39,34 +44,26 @@ const AdminShiftReports: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // --- Reset Page on New Search ---
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchTerm]);
 
-  // --- Fetch Data Effect ---
+  // Fetch Table Data
   useEffect(() => {
     const fetchShifts = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        // Send BOTH the page number and the search term to Django
         const response = await api.get('/sales/reports/closed-shift', {
-            params: { 
-                page: currentPage,
-                search: debouncedSearchTerm // DRF's default parameter for SearchFilter
-            }
+            params: { page: currentPage, search: debouncedSearchTerm }
         });
 
         const data = response.data;
-        
-        // Extract array from DRF's paginated shape
         const closedShifts = data.results ? data.results : (Array.isArray(data) ? data : []);
 
         setHasNext(!!data.next);
         setHasPrev(!!data.previous);
 
-        // Sort current page by newest first
         const sortedShifts = [...closedShifts].filter(Boolean).sort((a, b) => {
             const dateA = new Date(a.formatted_end_time || a.formatted_start_time).getTime();
             const dateB = new Date(b.formatted_end_time || b.formatted_start_time).getTime();
@@ -83,10 +80,35 @@ const AdminShiftReports: React.FC = () => {
     };
 
     fetchShifts();
-  }, [currentPage, debouncedSearchTerm]); // Re-run whenever page OR debounced search changes
+  }, [currentPage, debouncedSearchTerm]);
+
+  // --- NEW: Fetch Individual Shift Details ---
+  useEffect(() => {
+    if (!selectedShiftId) {
+      setShiftDetails(null);
+      return;
+    }
+
+    const fetchDetails = async () => {
+      setIsModalLoading(true);
+      setModalError(null);
+      try {
+        // Adjust standard ID vs shift_code depending on what your backend expects here!
+        const response = await api.get(`/sales/reports/closed-shift/${selectedShiftId}/`);
+        setShiftDetails(response.data);
+      } catch (err: any) {
+        console.error("Failed to fetch shift details:", err);
+        setModalError(err.response?.data?.message || err.response?.data?.detail || "Failed to load shift details.");
+      } finally {
+        setIsModalLoading(false);
+      }
+    };
+
+    fetchDetails();
+  }, [selectedShiftId]);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 p-4">
+    <div className="max-w-7xl mx-auto space-y-6 p-4 relative">
       
       {/* HEADER & FILTERS */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -139,7 +161,6 @@ const AdminShiftReports: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  // Notice we map directly over 'shifts' now, not 'filteredShifts'
                   shifts.map((shift) => {
                     let varianceColor = "text-green-600 font-bold";
                     let varianceLabel = "Perfect Match";
@@ -153,7 +174,12 @@ const AdminShiftReports: React.FC = () => {
                     }
 
                     return (
-                      <tr key={shift.id} className="hover:bg-blue-50/50 transition-colors">
+                      <tr 
+                        key={shift.id} 
+                        // --- NEW: Pass the ID to trigger the fetch ---
+                        onClick={() => setSelectedShiftId(shift.id)} 
+                        className="hover:bg-blue-50/50 transition-colors cursor-pointer"
+                      >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-bold text-gray-900">{shift.cashier_name}</div>
                           <div className="text-xs font-medium text-gray-500 mb-1">{shift.branch_name}</div>
@@ -211,8 +237,125 @@ const AdminShiftReports: React.FC = () => {
                 </button>
             </div>
         </div>
-
       </div>
+
+      {/* --- NEW: DYNAMIC SHIFT DETAILS MODAL --- */}
+      {selectedShiftId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
+            
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-black text-gray-800">Shift Details</h3>
+                {shiftDetails && (
+                   <p className="text-xs text-gray-500 uppercase tracking-wider mt-1">ID: {shiftDetails.shift_code}</p>
+                )}
+              </div>
+              <button 
+                onClick={() => setSelectedShiftId(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 min-h-[300px] flex flex-col justify-center">
+              {isModalLoading ? (
+                 <div className="flex flex-col items-center justify-center text-gray-500 space-y-3">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                    <p>Fetching full shift record...</p>
+                 </div>
+              ) : modalError ? (
+                 <div className="bg-red-50 text-red-700 p-4 rounded text-center border border-red-100">
+                    <p className="font-bold mb-1">Error Loading Data</p>
+                    <p className="text-sm">{modalError}</p>
+                 </div>
+              ) : shiftDetails ? (
+                 <div className="space-y-6">
+                    {/* User Info */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p className="text-xs text-gray-500 mb-1">Cashier</p>
+                        <p className="font-bold text-gray-900">{shiftDetails.cashier_name}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p className="text-xs text-gray-500 mb-1">Branch</p>
+                        <p className="font-bold text-gray-900">{shiftDetails.branch_name}</p>
+                        </div>
+                    </div>
+
+                    {/* Times */}
+                    <div className="border-t border-b border-gray-100 py-4 space-y-2">
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Clock In:</span>
+                        <span className="font-medium text-gray-900">{new Date(shiftDetails.formatted_start_time).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Clock Out:</span>
+                        <span className="font-medium text-gray-900">{new Date(shiftDetails.formatted_end_time).toLocaleString()}</span>
+                        </div>
+                    </div>
+
+                    {/* Financials */}
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Total Revenue:</span>
+                        <span className="font-bold text-blue-600">₦{Number(shiftDetails.total_revenue).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Total Orders:</span>
+                        <span className="font-medium text-gray-900">{shiftDetails.order_count}</span>
+                        </div>
+                        
+                        {/* Note: If your detailed endpoint returns specific breakdowns like POS vs Transfer, you can add them right here! */}
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Expected Transfer:</span>
+                        <span className="font-medium text-gray-900">₦{Number(shiftDetails.expected_transfer).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Expected POS:</span>
+                        <span className="font-medium text-gray-900">₦{Number(shiftDetails.expected_pos).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Expected Cash:</span>
+                        <span className="font-medium text-gray-900">₦{Number(shiftDetails.expected_cash).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Declared Cash:</span>
+                        <span className="font-medium text-gray-900">₦{Number(shiftDetails.declared_cash).toLocaleString()}</span>
+                        </div>
+
+                        {/* Variance Highlight */}
+                        <div className={`mt-4 p-4 rounded-lg flex justify-between items-center font-bold ${
+                        shiftDetails.variance < 0 ? 'bg-red-50 text-red-700 border border-red-100' : 
+                        shiftDetails.variance > 0 ? 'bg-orange-50 text-orange-700 border border-orange-100' : 
+                        'bg-green-50 text-green-700 border border-green-100'
+                        }`}>
+                        <span>Variance</span>
+                        <span>
+                            {shiftDetails.variance > 0 ? '+' : ''}₦{Number(shiftDetails.variance).toLocaleString()}
+                        </span>
+                        </div>
+                    </div>
+                 </div>
+              ) : null}
+            </div>
+
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+              <button 
+                onClick={() => setSelectedShiftId(null)}
+                className="w-full bg-white border border-gray-300 text-gray-700 font-bold py-2.5 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                Close Details
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

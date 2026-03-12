@@ -43,6 +43,7 @@ import ExpenseManagement from '../features/finances/ExpenseManagement';
 import ProfitReport from '../features/reports/ProfitReport';
 import ReportsDashboard from '../features/reports/ReportsDashboard';
 import AdminShiftReports from '../features/admin-dash/AdminShiftReports';
+import AdminSalesOrders from '../features/admin-dash/AdminSalesOrders';
 
 
 
@@ -74,6 +75,7 @@ const AppRouter: React.FC = () => {
             <Route path="organization-stock" element={<OrganizationInventory/>}/>
             <Route path="inventory-batches" element={<InventoryBatches/>} />
             <Route path="inventory" element={<InventoryManagement/>} />
+             <Route path="sales-orders" element={<AdminSalesOrders/>} />
             <Route path="inventory-logs" element={<InventoryLogs/>} />
             <Route path="inventory/receive" element={<InventoryReceiving/>}/>
             <Route path="inventory/remove" element={<StockRemoval/>}/>
