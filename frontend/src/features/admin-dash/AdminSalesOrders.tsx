@@ -4,7 +4,7 @@ import api from '../../api/axiosInstance';
 // --- Interfaces ---
 export interface SalesOrder {
   id: string | number;
-  created_at: string;
+  formatted_date: string;
   customer_name: string | null;
   cashier_name: string;
   total_amount: number;
@@ -203,7 +203,7 @@ const AdminSalesOrders: React.FC = () => {
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors">#{String(order.id).slice(0, 8).toUpperCase()}</div>
-                        <div className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString()}</div>
+                        <div className="text-xs text-gray-500">{new Date(order.formatted_date).toLocaleString()}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900">{order.customer_name || 'Walk-in Customer'}</div>

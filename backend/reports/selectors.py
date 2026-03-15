@@ -1,13 +1,14 @@
 from datetime import timedelta
-from django.db.models import Sum, F, Count
-from django.db.models.functions import TruncDate
+from django.db.models import Sum, F, Count, DecimalField
+from django.db.models.functions import TruncDate, Coalesce
 from django.utils import timezone
-from sales.models import SalesOrder, SaleItem, Customer
-from inventory.models import InventoryBatch, Product
+from sales.models import SalesOrder, SaleItem, Customer, Payment, CustomerLedger
+from inventory.models import InventoryBatch, Product, ProductPriceHistory
 from finance.models import Expense
+from django.utils.dateparse import parse_date
 
-# Import the model from your sales app
-from sales.models import SalesOrder 
+from decimal import Decimal
+
 
 def get_dashboard_stats(*, user, branch_id=None):
     """
@@ -192,3 +193,98 @@ def get_7_day_revenue_trend(*, user, branch_id=None):
         })
 
     return trend
+
+
+
+def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
+    # Default to today if no date is provided
+    if target_date:
+        report_date = parse_date(target_date)
+    else:
+        report_date = timezone.now().date()
+
+    # 1. Base Querysets
+    sales_qs = SalesOrder.objects.filter(
+        tenant=user.tenant,
+        branch_id=branch_id,
+        created_at__date=report_date
+    )
+    
+    sale_items_qs = SaleItem.objects.filter(
+        order__tenant=user.tenant,
+        order__branch_id=branch_id,
+        order__created_at__date=report_date
+    )
+
+    # 2. Breakdown of Items Sold
+    items_breakdown = list(sale_items_qs.values(
+        product_name=F('product__name')
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('subtotal')
+    ).order_by('-total_quantity'))
+
+    # 3. Revenue, Profit, and Cashiers
+    sales_aggregates = sales_qs.aggregate(
+        total_revenue=Coalesce(Sum('total_amount'), Decimal('0.00'), output_field=DecimalField()),
+        cashier_count=Count('user', distinct=True)
+    )
+
+    profit_aggregates = sale_items_qs.aggregate(
+        total_cost=Coalesce(Sum(F('quantity') * F('cost_price_at_sale')), Decimal('0.00'), output_field=DecimalField()),
+        total_sales_value=Coalesce(Sum('subtotal'), Decimal('0.00'), output_field=DecimalField())
+    )
+    total_profit = profit_aggregates['total_sales_value'] - profit_aggregates['total_cost']
+
+    # 4. Expected Cash by Payment Method
+    payments_qs = Payment.objects.filter(
+        tenant=user.tenant,
+        branch_id=branch_id,
+        created_at__date=report_date
+    )
+    payment_breakdown = list(payments_qs.values('method').annotate(
+        total_amount=Sum('amount')
+    ))
+
+    # 5. Total Debt Repayment Made
+    debt_repayments = CustomerLedger.objects.filter(
+        tenant=user.tenant,
+        # Ensure 'PAYMENT' matches your exact choice for a debt repayment
+        transaction_type=CustomerLedger.TransactionType.PAYMENT, 
+        created_at__date=report_date
+    ).aggregate(
+        total_repaid=Coalesce(Sum('amount'), Decimal('0.00'), output_field=DecimalField())
+    )
+
+    # 6. Price Changes During the Day (Using your dedicated model)
+    # Adjust the field names (product__name, old_price, new_price) to match your exact model fields!
+    price_changes_qs = ProductPriceHistory.objects.filter(
+        tenant=user.tenant,
+        created_at__date=report_date
+    ).select_related('product')
+
+    price_changes_list = [
+        {
+            "product": change.product.name,
+            "old_price": change.old_price,
+            "new_price": change.new_price,
+            "changed_at": change.created_at.strftime("%I:%M %p"),
+            "changed_by": change.changed_by.get_full_name() if change.changed_by else "System"
+        }
+        for change in price_changes_qs
+    ]
+
+    # 7. Construct Final Payload
+    return {
+        "report_date": report_date.strftime("%Y-%m-%d"),
+        "branch_id": branch_id,
+        "summary": {
+            "total_sales_revenue": sales_aggregates['total_revenue'],
+            "total_sales_profit": total_profit,
+            "total_debt_repayment_collected": debt_repayments['total_repaid'],
+            "number_of_active_cashiers": sales_aggregates['cashier_count'],
+        },
+        "payment_methods_breakdown": payment_breakdown,
+        "items_sold_breakdown": items_breakdown,
+        "intra_day_price_changes": price_changes_list
+    }

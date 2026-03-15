@@ -1,7 +1,8 @@
 from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .selectors import get_dashboard_stats, get_sales_chart_data, get_top_selling_products, get_7_day_revenue_trend
+from .selectors import (get_dashboard_stats, get_sales_chart_data, get_top_selling_products, 
+                        get_7_day_revenue_trend, get_branch_eod_report)
 from rest_framework.views import APIView
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Value
 from django.db.models.functions import Coalesce, Cast
@@ -9,6 +10,8 @@ from django.utils.dateparse import parse_date
 from decimal import Decimal
 from sales.models import SalesOrder, SaleItem
 from rest_framework.exceptions import PermissionDenied
+from django.core.exceptions import ValidationError
+
 
 class DashboardStatsApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -160,3 +163,30 @@ class ProfitReportAPIView(APIView):
             "product_breakdown": product_breakdown
         })
 
+
+
+
+class BranchEODReportApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, branch_id):
+        # Security: Ensure only Admins or the assigned Branch Manager can view this
+        admin_roles = ['Admin', 'Super_Admin', 'Tenant_Admin']
+        is_admin = getattr(request.user, 'role', '') in admin_roles
+        
+        if not is_admin and str(request.user.branch_id) != str(branch_id):
+            return Response({"error": "You do not have permission to view this branch's reports."}, status=403)
+
+        # Allow historical lookups via query param, e.g., ?date=2026-03-15
+        target_date = request.query_params.get('date')
+
+        try:
+            report_data = get_branch_eod_report(
+                user=request.user, 
+                branch_id=branch_id, 
+                target_date=target_date
+            )
+            return Response(report_data, status=200)
+            
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=400)
