@@ -37,6 +37,8 @@ class Customer(TenantAwareModel):
 
     class Meta:
         db_table = 'customers'
+    def __str__(self):
+        return self.name
 
 class CustomerLedger(TenantAwareModel):
     """

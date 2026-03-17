@@ -70,6 +70,8 @@ const AdminLayout: React.FC = () => {
           <Link to="/admin/customers" className="p-2 hover:bg-gray-800 rounded transition-colors">Customers</Link>
           <Link to="/admin/expenses" className="p-2 hover:bg-gray-800 rounded transition-colors">Expenses</Link>
           <Link to="/admin/users" className="p-2 hover:bg-gray-800 rounded transition-colors">Users & Roles</Link>
+          <Link to="/admin/settings" className="p-2 hover:bg-gray-800 rounded transition-colors">Settings</Link>
+
           
           {/* --- REPORTS DROPDOWN --- */}
           <div className="flex flex-col">

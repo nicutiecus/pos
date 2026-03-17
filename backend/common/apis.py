@@ -23,7 +23,7 @@ class TenantSettingsApi(views.APIView):
         serializer = TenantSettingsSerializer(settings)
         return Response(serializer.data)
 
-    def put(self, request):
+    def patch(self, request):
         # We use 'put' to update the existing settings object
         settings = get_tenant_settings(user=request.user)
         
