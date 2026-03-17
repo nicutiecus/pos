@@ -1,8 +1,11 @@
-from .models import SalesOrder, CustomerLedger, ShiftReport, SalesOrder
+from .models import SalesOrder, CustomerLedger, ShiftReport, SalesOrder, Payment
 from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Count, Q
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 
-def get_sales_list(*, user, branch_id=None):
+
+def get_sales_list(*, user, branch_id=None, search_term=None):
     """
     Fetches sales history for the tenant.
     Optionally filters by branch.
@@ -22,6 +25,13 @@ def get_sales_list(*, user, branch_id=None):
     elif branch_id:
         # Admins: Can see everything, but allow them to filter by a specific branch if requested
         query = query.filter(branch_id=branch_id)
+    if search_term:
+        query = query.filter(
+            Q(id__icontains=search_term) |
+            Q(cashier__first_name__icontains=search_term) |
+            Q(cashier__last_name__icontains=search_term) |
+            Q(cashier__email__icontains=search_term)
+        )
 
     return query.order_by('-created_at')# sales/selectors.py
 
@@ -52,42 +62,64 @@ def get_customer_ledger(*, user, customer_id: str):
         customer_id=customer_id
     ).order_by('-created_at')
 
+
 def get_current_shift_data(*, user):
-    # 1. Find the Open Shift (ShiftReport uses 'cashier')
+    active_branch_id = getattr(user, 'branch_id', None)
+    
+    # 1. Find the Open Shift
     shift, created = ShiftReport.objects.get_or_create(
         tenant=user.tenant,
-        cashier=user, # ✅ REVERTED back to 'cashier' for ShiftReport
+        cashier=user, 
         status=ShiftReport.Status.OPEN,
-        defaults={'branch_id': user.branch_id}
+        defaults={'branch_id': active_branch_id}
     )
 
-    # 2. Aggregate Sales (SalesOrder uses 'user')
-    sales_qs = SalesOrder.objects.filter(
+    # 2. Count New Sales Orders
+    order_count = SalesOrder.objects.filter(
         tenant=user.tenant,
-        user=user,    # ✅ KEPT as 'user' for SalesOrder
+        user=user,
         created_at__gte=shift.start_time
-    )
+    ).count()
 
-    # 3. Calculate totals using Django's database aggregation
-    # Note: We use 'payments__method' to look into the related Payment model
-    aggregates = sales_qs.aggregate(
-        order_count=Count('id', distinct=True),
-        expected_cash=Sum('payments__amount', filter=Q(payments__method='Cash')),
-        expected_pos=Sum('payments__amount', filter=Q(payments__method='POS')),
-        expected_transfer=Sum('payments__amount', filter=Q(payments__method='Transfer')),
-        total_revenue=Sum('payments__amount')
-    )
+    # 3. Aggregate NEW SALES Payment
+# 2. Count New Sales Orders
+    order_count = SalesOrder.objects.filter(
+        tenant=user.tenant, user=user, created_at__gte=shift.start_time
+    ).count()
 
-    # 4. Return the exact JSON dictionary your frontend requested
+    # 3. 🚀 Aggregate ALL Payments in one single query
+    payments = Payment.objects.filter(
+        tenant=user.tenant,
+        processed_by=user,
+        created_at__gte=shift.start_time
+    ).aggregate(
+        # The ultimate drawer totals (Sales + Debt)
+        expected_cash=Coalesce(Sum('amount', filter=Q(method='Cash')), Decimal('0.00')),
+        expected_pos=Coalesce(Sum('amount', filter=Q(method='POS')), Decimal('0.00')),
+        expected_transfer=Coalesce(Sum('amount', filter=Q(method='Transfer')), Decimal('0.00')),
+        total_revenue=Coalesce(Sum('amount'), Decimal('0.00')),
+        
+        # Breakdown values for the UI
+        new_sales_cash=Coalesce(Sum('amount', filter=Q(method='Cash', transaction_type='Sales')), Decimal('0.00')),
+        debt_recovery_cash=Coalesce(Sum('amount', filter=Q(method='Cash', transaction_type='Debt Payment')), Decimal('0.00')),
+    )
+   
+    # 6. Return the EXACT JSON dictionary your frontend expects
     return {
-        "shift_id": shift.shift_code,
+        "shift_id": shift.shift_code, # ✅ Restored! Frontend will now find this to close the shift.
         "start_time": shift.start_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "cashier_name": user.get_full_name() or user.email,
-        "order_count": aggregates['order_count'] or 0,
-        "expected_cash": aggregates['expected_cash'] or 0.00,
-        "expected_pos": aggregates['expected_pos'] or 0.00,
-        "expected_transfer": aggregates['expected_transfer'] or 0.00,
-        "total_revenue": aggregates['total_revenue'] or 0.00
+        "order_count": order_count or 0,
+        "expected_cash": payments['expected_cash'] or Decimal('0.00'),
+        "expected_pos": payments['expected_pos'] or Decimal('0.00'),
+        "expected_transfer": payments['expected_transfer'] or Decimal('0.00'),
+        "total_revenue": payments['total_revenue'] or Decimal('0.00'),
+        
+        # We can still pass the breakdown safely just in case the UI wants to show it
+        "breakdown": {
+            "new_sales_cash": payments['new_sales_cash'],
+            "debt_recovery_cash": payments['debt_recovery_cash']
+        }
     }
 
 
@@ -124,8 +156,7 @@ def get_shift_reports(*, user, branch_id=None, status='Closed', search_term=None
     return query
 
 
-from django.shortcuts import get_object_or_404
-from .models import ShiftReport # Ensure this is imported
+
 
 def get_shift_report_detail(*, user, shift_id):
     """

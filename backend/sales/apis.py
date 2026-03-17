@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
 from .selectors import (get_sales_list, get_sale_detail, get_customer_ledger, 
-                        get_current_shift_data, get_shift_reports)
+                        get_current_shift_data, get_shift_reports, get_shift_report_detail)
 from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer, 
                           CreateSaleSerializer, PayDebtSerializer, CustomerLedgerSerializer,
                           CloseShiftSerializer, ShiftReportSerializer)
@@ -11,12 +11,14 @@ from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer,
 from .services import create_sale_service, pay_customer_debt_service, close_shift_service
 from .pagination import StandardResultsSetPagination
 from rest_framework.views import APIView
-from .models import SalesOrder, ShiftReport
+from .models import SalesOrder, ShiftReport, Payment, CustomerLedger
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from common.models import Branch
-
-
+from rest_framework import status as drf_status
+from django.db.models import Sum, Q
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 
 
 
@@ -65,8 +67,20 @@ class SalesListApi(views.APIView):
         sales = get_sales_list(user=request.user, branch_id=branch_id)
         
         # Pagination could be added here later
+         # 2. Initialize the paginator
+        paginator = StandardResultsSetPagination()
+        
+        # 3. Slice the data based on the ?page= parameter in the URL
+        paginated_sales = paginator.paginate_queryset(sales, request)
+        
+        # 4. Serialize ONLY the 10 items for this specific page
+        serializer = SalesOrderListSerializer(paginated_sales, many=True)
+        
+        # 5. Return the special paginated response format
+       
         serializer = SalesOrderListSerializer(sales, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+        return paginator.get_paginated_response(serializer.data)
 
 
 
@@ -111,7 +125,8 @@ class PayDebtApi(views.APIView):
             return Response({
                 "message": "Payment successful",
                 "new_balance": ledger.balance_after,
-                "transaction_id": ledger.id
+                "transaction_id": ledger.id,
+                #"receipt_no": ledger.reference_id
             }, status=status.HTTP_200_OK)
 
         except ValidationError as e:
@@ -120,13 +135,15 @@ class PayDebtApi(views.APIView):
 
 
 
-
-class CurrentShiftApi(views.APIView):
+class CurrentShiftApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        # 1. Fetch the perfectly formatted flat dictionary from the selector
         shift_data = get_current_shift_data(user=request.user)
-        return Response(shift_data, status=status.HTTP_200_OK)
+        
+        # 2. Return it directly to the frontend! No serializer needed.
+        return Response(shift_data, status=200)
 
 class CloseShiftApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -216,11 +233,7 @@ class ReceiptAPIView(APIView):
 
 
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework import status as drf_status
-from .models import ShiftReport
+
 
 class ActiveShiftAPIView(APIView):
     """
@@ -240,12 +253,32 @@ class ActiveShiftAPIView(APIView):
         ).first()
 
         if active_shift:
-            # They already have an open shift, send them right back to selling!
+            # 1. Calculate Real-Time Cash from New Sales
+            sales_cash = Payment.objects.filter(
+                tenant=user.tenant, 
+                processed_by=user, 
+                method='Cash', 
+                created_at__gte=active_shift.start_time
+            ).aggregate(total=Coalesce(Sum('amount'), Decimal('0.00')))['total']
+
+            # 2. Calculate Real-Time Cash from Debt Recoveries
+            debt_cash = Payment.objects.filter(
+                tenant=user.tenant, 
+                processed_by=user, 
+                method='Cash', 
+                transaction_type=Payment.Transactiontype.DEBT_PAYMENT, # ✅ Added Transaction Type Filter
+                created_at__gte=active_shift.start_time
+            ).aggregate(total=Coalesce(Sum('amount'), Decimal('0.00')))['total']
+            
+            # 3. Combine for the exact drawer balance
+            real_time_expected_cash = sales_cash + debt_cash
+
             return Response({
                 "status": "active",
                 "shift_code": active_shift.shift_code,
                 "start_time": active_shift.start_time,
-                "expected_cash": active_shift.expected_cash
+                "expected_cash": real_time_expected_cash, # ✅ Now 100% accurate!
+                "debt_recovery_cash": debt_cash
             })
         
         # No active shift found. Frontend should route them to the "Start Shift" screen.
@@ -346,9 +379,6 @@ class ClosedShiftListApi(APIView):
         return paginator.get_paginated_response(serializer.data)
     
 
-
-from .selectors import get_shift_report_detail
-from .serializers import ShiftReportSerializer # Reusing our excellent serializer
 
 class ShiftReportDetailApi(APIView):
     permission_classes = [IsAuthenticated]

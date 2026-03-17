@@ -20,7 +20,11 @@ def generate_shift_code():
     pass
     
 
-
+class PaymentMethodChoices(models.TextChoices):
+    CASH = 'Cash', _('Cash')
+    TRANSFER = 'Transfer', _('Transfer')
+    POS = 'POS', _('POS')
+    CREDIT = 'Credit', _('Credit')
 
 class Customer(TenantAwareModel):
     id = models.CharField(primary_key=True, default=generate_customer_id, editable=False)
@@ -56,6 +60,13 @@ class CustomerLedger(TenantAwareModel):
         null=True, 
         blank=True,
         help_text="The branch where this transaction occurred"
+    )
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.PROTECT, 
+        null=True, 
+        blank=True,
+        help_text="The cashier who collected this debt payment"
     )
 
     class Meta:
@@ -96,16 +107,16 @@ class SaleItem(models.Model):
         db_table = 'sale_items'
 
 class Payment(TenantAwareModel):
-    class Method(models.TextChoices):
-        CASH = 'Cash', _('Cash')
-        TRANSFER = 'Transfer', _('Transfer')
-        POS = 'POS', _('POS')
-        CREDIT = 'Credit', _('Credit')
+    class Transactiontype(models.TextChoices):
+        SALES='Sales', _('Sales')
+        DEBT_PAYMENT='Debt Payment', _('Debt Payment')
 
-    order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='payments')
+    order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, related_name='payments', null=True, blank=True)
+    transaction_type= models.CharField(max_length=20, choices=Transactiontype.choices, default=Transactiontype.SALES)
     branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT, null=True)
     processed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True)
-    method = models.CharField(max_length=20, choices=Method.choices)
+    method = models.CharField(max_length=20, choices=PaymentMethodChoices.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reference_code = models.CharField(max_length=100, null=True, blank=True)
 

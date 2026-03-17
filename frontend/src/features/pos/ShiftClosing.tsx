@@ -12,6 +12,14 @@ interface ShiftSummary {
   expected_pos: number;
   expected_transfer: number;
   total_revenue: number;
+  debt_pos?: number;
+  debt_transfer?: number;
+
+  breakdown:
+  {new_sales_cash: number;
+    debt_recovery_cash: number
+
+  };
 }
 
 interface Props {
@@ -40,11 +48,9 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
   useEffect(() => {
     const fetchCurrentShift = async () => {
       try {
-        // Adjust endpoint to match your Django URL
         const res = await api.get('/sales/reports/shift/current'); 
         setShiftData(res.data);
       } catch (err: any) {
-        // If 404, it might mean no active shift exists
         console.error("Failed to fetch shift", err);
       } finally {
         setIsLoading(false);
@@ -52,6 +58,16 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
     };
     fetchCurrentShift();
   }, []);
+
+  // --- NEW: Calculations ---
+  const salesCash = Number(shiftData?.breakdown.new_sales_cash || 0);
+  const debtCash = Number(shiftData?.breakdown.debt_recovery_cash || 0);
+  
+  // Total expected cash is now Sales Cash + Debt Cash
+  const totalExpectedCash = salesCash + debtCash; 
+  
+  const discrepancy = Number(declaredCash || 0) - totalExpectedCash;
+  const isShort = discrepancy < 0;
 
   // --- Handlers ---
   const handlePrint = useReactToPrint({
@@ -75,16 +91,15 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
       const payload = {
         shift_id: shiftData.shift_id,
         declared_cash: Number(declaredCash),
-        expected_cash: shiftData.expected_cash,
-        variance: Number(declaredCash) - shiftData.expected_cash,
+        expected_cash: totalExpectedCash, // Update to send the combined expected cash
+        variance: discrepancy,            // Use the updated discrepancy
         notes: notes
       };
 
-      // Hit your Django backend to finalize the shift
       await api.post('/sales/reports/shift/close/', payload);
       
       setIsClosed(true);
-      setTimeout(() => handlePrint(), 300); // Auto-print the Z-report
+      setTimeout(() => handlePrint(), 300); 
       
     } catch (err: any) {
       alert(`Failed to close shift: ${err.response?.data?.message || err.message}`);
@@ -92,11 +107,6 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
       setIsSubmitting(false);
     }
   };
-
-  // --- Calculations ---
-  const discrepancy = Number(declaredCash || 0) - (shiftData?.expected_cash || 0);
-  const isShort = discrepancy < 0;
-  //const isOver = discrepancy > 0;
 
   if (isLoading) return <div className="p-10 text-center text-gray-500">Loading Shift Data...</div>;
 
@@ -122,7 +132,6 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
                 <div className="text-sm font-bold text-gray-500 uppercase">Cashier</div>
                 <div className="text-lg font-extrabold text-blue-700">{userName}</div>
             </div>
-            {/* NEW CANCEL BUTTON */}
             {!isClosed && (
                 <button onClick={onCancel} className="text-gray-500 hover:text-red-600 font-bold text-2xl leading-none">&times;</button>
             )}
@@ -138,7 +147,6 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
                 <button onClick={() => handlePrint()} className="mt-4 bg-green-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-green-700 transition-colors">
                     Reprint Report
                 </button>
-                {/* NEW LOGOUT BUTTON */}
                     <button onClick={onLogout} className="bg-green-600 text-white px-8 py-2 rounded-lg font-bold shadow hover:bg-green-700 transition-colors">
                         Complete & Log Out
                     </button>
@@ -153,22 +161,48 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
                       <h3 className="font-bold text-gray-800">System Expectations</h3>
                   </div>
                   <div className="p-6 space-y-4">
+                      {/* SALES SECTION */}
+                      <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Sales Revenue</div>
                       <div className="flex justify-between items-center py-2 border-b border-gray-100">
                           <span className="text-gray-600">Total Orders Processed</span>
                           <span className="font-bold text-gray-900">{shiftData.order_count}</span>
                       </div>
-                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      {/*<div className="flex justify-between items-center py-2 border-b border-gray-100">
                           <span className="text-gray-600">POS / Card Payments</span>
                           <span className="font-bold text-gray-900">₦{Number(shiftData.expected_pos).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      </div>*/}
+                      {/*<div className="flex justify-between items-center py-2 border-b border-gray-100">
                           <span className="text-gray-600">Bank Transfers</span>
                           <span className="font-bold text-gray-900">₦{Number(shiftData.expected_transfer).toLocaleString()}</span>
+                      </div>*/}
+                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                          <span className="text-gray-600">Sales Cash</span>
+                          <span className="font-bold text-gray-900">₦{salesCash.toLocaleString()}</span>
                       </div>
+
+                      {/* DEBT RECOVERY SECTION */}
                       
+                        
+                            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-6 mb-2">Debt Recovered</div>
+                            {/*<div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                <span className="text-gray-600">Debt POS / Card</span>
+                                <span className="font-bold text-gray-900">₦{Number(shiftData.debt_pos || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                <span className="text-gray-600">Debt Transfers</span>
+                                <span className="font-bold text-gray-900">₦{Number(shiftData.debt_transfer || 0).toLocaleString()}</span>
+                            </div>*/}
+                            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                <span className="text-gray-600">Debt Cash</span>
+                                <span className="font-bold text-gray-900">₦{debtCash.toLocaleString()}</span>
+                            </div>
+                        
+                      
+                      
+                      {/* COMBINED TOTAL */}
                       <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100 flex justify-between items-center">
-                          <span className="font-bold text-blue-900">Expected Cash in Drawer</span>
-                          <span className="text-2xl font-black text-blue-700">₦{Number(shiftData.expected_cash).toLocaleString()}</span>
+                          <span className="font-bold text-blue-900">Total Expected Cash</span>
+                          <span className="text-2xl font-black text-blue-700">₦{totalExpectedCash.toLocaleString()}</span>
                       </div>
                   </div>
               </div>
@@ -236,11 +270,8 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
       )}
 
       {/* --- HIDDEN THERMAL RECEIPT FOR PRINTING --- */}
-      {/* --- HIDDEN THERMAL RECEIPT FOR PRINTING --- */}
-      {/* Do NOT use display: none. This absolute positioning safely hides it while keeping it printable */}
       <div className="absolute -left-[9999px] top-0 opacity-0 -z-50 pointer-events-none">
         
-        {/* Notice we matched the width: '80mm' and Tailwind classes from your ReceiptTemplate! */}
         <div ref={printRef} className="p-2 text-xs font-mono text-black bg-white" style={{ width: '80mm' }}>
             <div className="text-center font-bold text-lg mb-1">{branchName}</div>
             <div className="text-center mb-4">END OF SHIFT (Z-REPORT)</div>
@@ -260,15 +291,26 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
                 </div>
             </div>
 
+            {/* PRINT: Sales Breakdown */}
             <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1 text-[10px]">
-                <div className="font-bold mb-1">PAYMENT BREAKDOWN:</div>
-                <div className="flex justify-between"><span>POS/Card:</span> <span>₦{Number(shiftData?.expected_pos).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Transfer:</span> <span>₦{Number(shiftData?.expected_transfer).toLocaleString()}</span></div>
-                <div className="flex justify-between font-bold mt-1"><span>Expected Cash:</span> <span>₦{Number(shiftData?.expected_cash).toLocaleString()}</span></div>
+                <div className="font-bold mb-1">SALES PAYMENTS:</div>
+                {/*<div className="flex justify-between"><span>POS/Card:</span> <span>₦{Number(shiftData?.expected_pos || 0).toLocaleString()}</span></div>*/}
+                <div className="flex justify-between"><span>Transfer:</span> <span>₦{Number(shiftData?.expected_transfer || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Cash:</span> <span>₦{salesCash.toLocaleString()}</span></div>
             </div>
 
+            {/* PRINT: Debt Breakdown */}
             <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1 text-[10px]">
-                <div className="flex justify-between font-bold"><span>Declared Cash:</span> <span>₦{Number(declaredCash).toLocaleString()}</span></div>
+                <div className="font-bold mb-1">DEBT RECOVERED:</div>
+                <div className="flex justify-between"><span>POS/Card:</span> <span>₦{Number(shiftData?.debt_pos || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Transfer:</span> <span>₦{Number(shiftData?.debt_transfer || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Cash:</span> <span>₦{debtCash.toLocaleString()}</span></div>
+            </div>
+
+            {/* PRINT: Final Cash Math */}
+            <div className="border-b border-black border-dashed pb-2 mb-2 space-y-1 text-[10px]">
+                <div className="flex justify-between font-bold mt-1"><span>Total Expected Cash:</span> <span>₦{totalExpectedCash.toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold mt-2"><span>Declared Cash:</span> <span>₦{Number(declaredCash).toLocaleString()}</span></div>
                 <div className="flex justify-between font-bold">
                     <span>Variance:</span> 
                     <span>

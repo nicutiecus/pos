@@ -5,30 +5,25 @@ import { ReceiptTemplate, type ReceiptData } from './ReceiptTemplate';
 import { formatBackendDate } from '../../utils/dateFormatter';
 
 // --- Types ---
-
-// 1. Summary: Lightweight data for the list
 interface SaleSummary {
-  id: string; // Changed to string to match UUIDs usually
+  id: string | number; // Added number support
   receipt_number: string;
-  formatted_date: string; // or formatted_date
+  formatted_date: string; 
   total_amount: string;
-  payment_method: string; // or payment_status
-  // Items might be missing in summary, so we make it optional
+  payment_method: string; 
   items?: Array<{
     product_name: string;
     quantity: number;
     total: number;
   }>;
-  // Fields for receipt mapping
   branch_name?: string;
   cashier_name?: string;
   customer_name?: string;
   amount_paid?: string;
 }
 
-// 2. Detail: Full data for the receipt (fetched on demand)
 interface SaleDetail {
-  id: string;
+  id: string | number; // Added number support
   branch_name: string;
   cashier_name: string;
   customer_name: string;
@@ -50,14 +45,14 @@ const SalesHistory: React.FC = () => {
   const [sales, setSales] = useState<SaleSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
-  const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
+  const [expandedSaleId, setExpandedSaleId] = useState<string | number | null>(null);
 
   // --- Printing State ---
   const receiptRef = useRef<HTMLDivElement>(null);
   const [printData, setPrintData] = useState<ReceiptData | null>(null);
 
   const triggerPrint = useReactToPrint({
-    contentRef: receiptRef,
+    contentRef: receiptRef, // Change to `content: () => receiptRef.current` if you're on V2!
     documentTitle: "POS_Receipt",
     onAfterPrint: () => setPrintData(null),
   });
@@ -67,10 +62,14 @@ const SalesHistory: React.FC = () => {
   }, []);
 
   const fetchSales = async () => {
+    setIsLoading(true);
     try {
-      // Fetch sales summary list
       const res = await api.get('sales/list?limit=50'); 
-      setSales(res.data);
+      
+      // ✅ FIX 1: Safely extract array if backend uses pagination
+      const salesData = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : []);
+      setSales(salesData);
+      
     } catch (err) {
       console.error("Failed to load sales history", err);
     } finally {
@@ -82,20 +81,20 @@ const SalesHistory: React.FC = () => {
   const handlePrintRequest = async (summary: SaleSummary) => {
     setIsFetchingDetails(true);
     try {
-      // 1. Fetch Full Details (Items are needed for receipt)
       const res = await api.get(`/sales/${summary.id}/`);
       const fullSale: SaleDetail = res.data;
 
-      // 2. Map to Receipt Format
+      // ✅ FIX 2: Added String() to prevent .slice() crash, and fallback empty arrays
       const receiptPayload: ReceiptData = {
         businessName: "EQUEST COLDROOM", 
         branchName: fullSale.branch_name || "Main Branch",
-        receiptNumber: fullSale.receipt_number || fullSale.id.slice(0, 8).toUpperCase(),
+        receiptNumber: fullSale.receipt_number || String(fullSale.id).slice(0, 8).toUpperCase(),
         date: fullSale.created_at,
         cashierName: fullSale.cashier_name?.split('@')[0] || "Cashier",
         customerName: fullSale.customer_name || "Walk-in",
         
-        items: fullSale.items.map(item => ({
+        // ✅ FIX 3: Safe array mapping fallback
+        items: (fullSale.items || []).map(item => ({
           product_name: item.product_name,
           quantity: item.quantity,
           unit_price: Number(item.unit_price),
@@ -112,7 +111,6 @@ const SalesHistory: React.FC = () => {
 
       setPrintData(receiptPayload);
       
-      // 3. Trigger Print (Small delay for render)
       setTimeout(() => triggerPrint(), 100);
 
     } catch (err) {
@@ -127,7 +125,6 @@ const SalesHistory: React.FC = () => {
 
   return (
     <div className="bg-white h-full flex flex-col">
-      {/* Header */}
       <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
         <h2 className="font-bold text-gray-800 text-lg">Recent Transactions</h2>
         <button onClick={fetchSales} className="text-blue-600 hover:text-blue-800 text-sm font-medium">
@@ -135,7 +132,6 @@ const SalesHistory: React.FC = () => {
         </button>
       </div>
 
-      {/* Table Content */}
       <div className="flex-1 overflow-y-auto">
         {sales.length === 0 ? (
           <div className="p-10 text-center text-gray-400">No sales recorded today.</div>
@@ -158,15 +154,14 @@ const SalesHistory: React.FC = () => {
                     className={`cursor-pointer hover:bg-blue-50 transition-colors ${expandedSaleId === sale.id ? 'bg-blue-50' : ''}`}
                   >
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-600">
-                      {sale.receipt_number || sale.id.slice(0,8)}
+                      {/* ✅ FIX 2 APPLIED HERE */}
+                      {sale.receipt_number || String(sale.id).slice(0,8)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                       {formatBackendDate(sale.formatted_date, { hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      
                         {sale.customer_name || "Walk-in"}
-                      
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-bold text-right">
                       ₦{Number(sale.total_amount).toLocaleString()}
@@ -183,18 +178,18 @@ const SalesHistory: React.FC = () => {
                     </td>
                   </tr>
                   
-                  {/* EXPANDED DETAILS - Safe rendering if items missing */}
                   {expandedSaleId === sale.id && (
                     <tr className="bg-gray-50 animate-fade-in-down">
                       <td colSpan={5} className="p-4 border-b border-gray-100 shadow-inner">
                         <div className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Items Purchased</div>
-                        {sale.items && sale.items.length > 0 ? (
+                        
+                        {/* ✅ FIX 3: Safe array mapping fallback applied here too */}
+                        {(sale.items || []).length > 0 ? (
                             <ul className="space-y-1">
-                              {sale.items.map((item, idx) => (
+                              {(sale.items || []).map((item, idx) => (
                                 <li key={idx} className="flex justify-between text-sm text-gray-700">
                                   <span>{item.quantity}x {item.product_name}</span>
                                   <span className="font-mono text-gray-500">₦{Number(item.total).toLocaleString()}</span>
-                                  {/* Handle simple summary items which might not have total calculated */}
                                 </li>
                               ))}
                             </ul>
@@ -213,8 +208,7 @@ const SalesHistory: React.FC = () => {
         )}
       </div>
 
-      {/* Hidden Receipt Component - REQUIRED for printing */}
-      <div style={{ display: 'none' }}>
+      <div className="absolute -left-[9999px] top-0 opacity-0 -z-50 pointer-events-none">
         <ReceiptTemplate ref={receiptRef} data={printData} />
       </div>
 

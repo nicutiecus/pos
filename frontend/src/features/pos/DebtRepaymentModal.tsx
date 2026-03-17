@@ -82,7 +82,7 @@ const DebtRepaymentModal: React.FC<Props> = ({ onClose }) => {
 
       // Format the data to reuse our standard ReceiptTemplate
       const receiptPayload: ReceiptData = {
-        businessName: "EQUEST COLDROOM", 
+        businessName: "GRAMI GLOBAL SOLUTIONS COLDROOM", 
         branchName: localStorage.getItem('branchName') || "Main Branch",
         receiptNumber: data.invoice_number,
         date: data.date,

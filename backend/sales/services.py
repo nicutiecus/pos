@@ -242,49 +242,6 @@ def create_sale_service(
         return order
     
 
-
-def pay_customer_debt_service(
-    *, 
-    user, 
-    customer_id: str, 
-    branch_id: str, 
-    amount: Decimal, 
-    method: str, 
-    notes: str = ""
-):
-    # 1. Validate the Branch
-    branch = Branch.objects.filter(id=branch_id, tenant=user.tenant).first()
-    if not branch:
-        raise ValidationError("Invalid branch.")
-
-    with transaction.atomic():
-        try:
-            customer = Customer.objects.select_for_update().get(id=customer_id, tenant=user.tenant)
-        except Customer.DoesNotExist:
-            raise ValidationError("Customer not found.")
-
-        if amount <= 0:
-            raise ValidationError("Payment amount must be greater than zero.")
-
-        if amount > customer.current_debt:
-            raise ValidationError(f"Amount exceeds current debt. Outstanding debt is {customer.current_debt}.")
-
-        # 2. Deduct the debt
-        customer.current_debt -= amount
-        customer.save()
-
-        # 3. Create the Ledger Entry WITH the branch
-        ledger = CustomerLedger.objects.create(
-            tenant=user.tenant,
-            branch=branch, # ✅ ADD THIS
-            customer=customer,
-            transaction_type=CustomerLedger.TransactionType.PAYMENT,
-            amount=amount,
-            balance_after=customer.current_debt,
-            notes=notes or f"Debt payment via {method}"
-        )
-
-        return ledger
     
 
 
@@ -334,6 +291,16 @@ def pay_customer_debt_service(
             reference_id=invoice_number, 
             
             notes=notes or f"Debt payment via {method}"
+        )
+        Payment.objects.create(
+            tenant=user.tenant,
+            branch=branch,
+            customer=customer,
+            processed_by=user,
+            transaction_type=Payment.Transactiontype.DEBT_PAYMENT,
+            method=method,
+            amount=amount,
+            reference_code=invoice_number
         )
 
         return ledger

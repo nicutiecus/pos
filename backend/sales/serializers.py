@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import ( Payment, SalesOrder, SaleItem, 
-                    Customer, CustomerLedger, ShiftReport)
+                    Customer, CustomerLedger, ShiftReport, PaymentMethodChoices)
 
 class SaleItemDetailSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
@@ -17,7 +17,7 @@ class SaleItemSerializer(serializers.Serializer):
 
 class PaymentSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
-    method = serializers.ChoiceField(choices=Payment.Method.choices)
+    method = serializers.ChoiceField(choices=PaymentMethodChoices.choices)
     reference_code = serializers.CharField(required=False, allow_blank=True)
 
 class CreateSaleSerializer(serializers.Serializer):
@@ -136,3 +136,4 @@ class ShiftReportSerializer(serializers.ModelSerializer):
         if obj.cashier:
             return obj.cashier.get_full_name() or obj.cashier.email
         return "Unknown"
+    
