@@ -223,7 +223,7 @@ def create_sale_service(
             CustomerLedger.objects.create(
                 tenant=user.tenant,
                 customer=customer,
-                transaction_type=CustomerLedger.TransactionType.INVOICE,
+                transaction_type=CustomerLedger.TransactionType.SALE,
                 amount=debt_amount,
                 balance_after=customer_obj.current_debt,
                 reference_id=order.id,

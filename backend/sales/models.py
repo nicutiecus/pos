@@ -45,7 +45,7 @@ class CustomerLedger(TenantAwareModel):
     Double-entry bookkeeping for customer credit.
     """
     class TransactionType(models.TextChoices):
-        INVOICE = 'Invoice', _('Invoice')
+        SALE = 'Sale', _('Sale')
         PAYMENT = 'Payment', _('Payment')
         RETURN = 'Return', _('Return')
 

@@ -43,14 +43,22 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     branch_name = serializers.CharField(source='branch.name', read_only=True)
     formatted_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+    payment_method = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
         fields = [
             'id', 'branch_name', 'cashier_name', 
             'customer_name', 'total_amount', 'amount_paid', 
-            'payment_status', 'formatted_date'
+            'payment_status', 'formatted_date', 'payment_method'
         ]
+    def get_payment_method(self, obj):
+        # Grab the method from every payment attached to this order
+        methods = [payment.method for payment in obj.payments.all()]
+        
+        # Use set() to remove duplicates (e.g., if they made two separate "Cash" payments)
+        # Then join them into a clean string for the frontend table
+        return ", ".join(set(methods)) if methods else "None"
 
 class SalesOrderDetailSerializer(serializers.ModelSerializer):
     items = SaleItemDetailSerializer(many=True, read_only=True)

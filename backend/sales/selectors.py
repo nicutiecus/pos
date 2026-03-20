@@ -12,7 +12,7 @@ def get_sales_list(*, user, branch_id=None, search_term=None):
     """
     query = SalesOrder.objects.filter(tenant=user.tenant).select_related(
         'customer', 'user', 'branch'
-    ).order_by('-created_at')
+    ).prefetch_related('payments').order_by('-created_at')
 
 
     admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']

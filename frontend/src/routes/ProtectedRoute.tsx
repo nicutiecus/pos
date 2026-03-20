@@ -19,6 +19,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
     // Basic fallback routing based on role
     if (userRole === 'CASHIER') return <Navigate to="/pos" replace />;
     if (userRole === 'Tenant_Admin') return <Navigate to="/admin" replace />;
+    if (userRole==='Super_Admin') return <Navigate to ="/super-admin" replace />;
     return <Navigate to="/login" replace />;
   }
 

@@ -11,3 +11,16 @@ class IsTenantAdmin(BasePermission):
             request.user.is_authenticated and 
             request.user.is_tenant_admin
         )
+    
+
+
+class IsSuperAdmin(BasePermission):
+    """
+    Allows access only to authenticated Super Admins.
+    """
+    def has_permission(self, request, view):
+        return bool(
+            request.user and 
+            request.user.is_authenticated and 
+            request.user.role == 'Super_Admin'
+        )

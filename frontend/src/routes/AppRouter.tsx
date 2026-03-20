@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
+import ImpersonationBanner from '../layouts/ImpersonationBanner';
 //Import Protected routes
 
 
@@ -48,12 +49,20 @@ import AdminEODReport from '../features/admin-dash/AdminEODReport';
 //Settings
 import AdminSettings from '../features/admin-dash/AdminSettings';
 
+//super
+import SuperAdminDashboard from '../features/super-admin/SuperAdminDashboard';
+import SuperAdminLogin from '../features/super-admin/SuperAdminLogin';
+
+
 
 
 
 
 const AppRouter: React.FC = () => {
   return (
+    <>
+
+    < ImpersonationBanner/>
     <Routes>
       {/* Default redirect to login */}
       <Route path="/" element={<Navigate to="/login" replace />} />
@@ -61,7 +70,14 @@ const AppRouter: React.FC = () => {
       {/* PUBLIC/AUTH ROUTES (Wrapped in AuthLayout) */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
+        <Route path="super-admin/login" element = {<SuperAdminLogin/>}/>
         <Route path="/onboard" element={<POSOnboardingWizard />} />
+      </Route>
+
+      {/* --- NEW: SUPER ADMIN ROUTES --- */}
+      <Route element={<ProtectedRoute allowedRoles={['Super_Admin']} />}>
+        {/* If you build a SuperAdminLayout later with a sidebar, wrap it here like <Route path="/super-admin" element={<SuperAdminLayout />}> */}
+        <Route path="/super-admin" element={<SuperAdminDashboard />} />
       </Route>
 
       {/* CASHIER POS ROUTES (Wrapped in POSLayout) */}
@@ -130,6 +146,7 @@ const AppRouter: React.FC = () => {
       {/* Catch-all 404 Route */}
       <Route path="*" element={<div className="p-10 text-center text-red-600 text-xl font-bold">404 - Page Not Found</div>} />
     </Routes>
+  </>
   );
 };
 

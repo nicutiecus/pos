@@ -10,9 +10,10 @@ class TenantTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
 
+        actual_role = 'Super_Admin' if user.is_superuser else user.role
         # Add custom claims
         token['email'] = user.email
-        token['role'] = user.role
+        token['role'] = actual_role
         
         # Handle Tenant Context
         if user.tenant:
@@ -33,12 +34,14 @@ class TenantTokenObtainPairSerializer(TokenObtainPairSerializer):
         # 1. Generate the standard tokens (access/refresh)
         data = super().validate(attrs)
 
+        actual_role = 'Super_Admin' if self.user.is_superuser else self.user.role
+
         # 2. Add custom data to the JSON response body
         # This allows the frontend to read 'role' without decoding the token
         data['user'] = {
             'id': self.user.id,
             'email': self.user.email,
-            'role': self.user.role,
+            'role': actual_role,
             'first_name': self.user.first_name,
             'tenant_id': self.user.tenant.id if self.user.tenant else None,
             'branch_id': self.user.branch.id if self.user.branch else None,

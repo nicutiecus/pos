@@ -15,7 +15,7 @@ interface Customer {
 interface LedgerEntry {
   id: string;
   created_at: string;
-  type: 'SALE' | 'PAYMENT' | 'REFUND';
+  transaction_type: 'Sale' | 'Payment' | 'Refund';
   amount: string;
   balance_after: string;
   reference: string;
@@ -408,13 +408,13 @@ const CustomerManagement: React.FC = () => {
                                       <div>
                                           <div className="text-xs text-gray-400">{formatBackendDate(entry.created_at)}</div>
                                           <div className="font-bold text-sm text-gray-700">
-                                              {entry.type === 'SALE' ? '🛍️ Credit Purchase' : entry.type === 'PAYMENT' ? '💰 Debt Repayment' : 'Refund'}
+                                              {entry.transaction_type === 'Sale' ? '🛍️ Credit Purchase' : entry.transaction_type === 'Payment' ? '💰 Debt Repayment' : 'Refund'}
                                               <span className="ml-2 font-mono text-xs text-gray-400">Ref: {entry.reference}</span>
                                           </div>
                                       </div>
                                       <div className="text-right">
-                                          <div className={`font-bold ${entry.type === 'PAYMENT' ? 'text-red-600' : 'text-green-600'}`}>
-                                              {entry.type === 'PAYMENT' ? '+' : '-'} ₦{Number(entry.amount).toLocaleString()}
+                                          <div className={`font-bold ${entry.transaction_type === 'Payment' ? 'text-green-600' : 'text-red-600'}`}>
+                                              {entry.transaction_type === 'Payment' ? '-' : '+'} ₦{Number(entry.amount).toLocaleString()}
                                           </div>
                                           <div className="text-xs text-gray-500">Balance: ₦{Number(entry.balance_after).toLocaleString()}</div>
                                       </div>
