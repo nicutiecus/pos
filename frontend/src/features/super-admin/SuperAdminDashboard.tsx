@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
-import { useNavigate } from 'react-router-dom';
+//import { useNavigate } from 'react-router-dom';
 
 // --- Interfaces ---
 interface GlobalStats {
@@ -21,7 +21,7 @@ interface Tenant {
 }
 
 const SuperAdminDashboard: React.FC = () => {
-  const navigate = useNavigate();
+  //const navigate = useNavigate();
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
