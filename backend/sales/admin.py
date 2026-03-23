@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Customer, SalesOrder, CustomerLedger, Payment
+from .models import Customer, SalesOrder, CustomerLedger, ShiftReport, Payment
 
 class CustomerLedgerInline(admin.TabularInline):
     model= CustomerLedger
@@ -19,3 +19,8 @@ class SalesOrderAdmin(admin.ModelAdmin):
 class PaymentAdmin(admin.ModelAdmin):
     list_display=("order","branch","method")
     list_filter=("branch","method")
+
+@admin.register(ShiftReport)
+class ShiftReportAdmin(admin.ModelAdmin):
+    list_display=("shift_code","branch","variance","declared_cash")
+    list_filter=("branch","start_time")
