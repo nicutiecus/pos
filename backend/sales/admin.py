@@ -17,4 +17,5 @@ class SalesOrderAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    pass
+    list_display=("order","branch","method")
+    list_filter=("branch","method")
