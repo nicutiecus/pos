@@ -12,7 +12,8 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(SalesOrder)
 class SalesOrderAdmin(admin.ModelAdmin):
-    pass
+    list_display=("id","branch","customer")
+    search_fields=("id","branch","customer")
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):

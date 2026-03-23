@@ -121,7 +121,7 @@ const SalesHistory: React.FC = () => {
             : fullSale.payment_method || 'Unknown';
 
       const receiptPayload: ReceiptData = {
-        businessName: "EQUEST COLDROOM", 
+        businessName: "GRAMI SOLUTIONS", 
         branchName: fullSale.branch_name || "Main Branch",
         receiptNumber: fullSale.receipt_number || String(fullSale.id).slice(0, 8).toUpperCase(),
         date: fullSale.created_at,

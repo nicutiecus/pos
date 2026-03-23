@@ -3,8 +3,9 @@ from .models import Product, InventoryBatch
 # Register your models here.
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    pass
+    list_display=("name","category")
+    search_fields=("name","sku")
 
 @admin.register(InventoryBatch)
 class InventoryBatchAdmin(admin.ModelAdmin):
-    pass
+    search_fields=("branch", "batch number")

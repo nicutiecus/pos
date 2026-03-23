@@ -60,15 +60,23 @@ const SuperAdminDashboard: React.FC = () => {
       const res = await api.post(`/super-admin/tenants/impersonate/${tenantId}/`);
 
       const newTenantToken = res.data.access;
+      //const newRefreshToken = res.data.refresh
       
       // 2. Save your current Super Admin token so you can return later
       const currentSuperToken = localStorage.getItem('accessToken');
       localStorage.setItem('superAdminBackupToken', currentSuperToken || '');
 
       localStorage.setItem('accessToken', newTenantToken);
+
+      /*if (newRefreshToken) {
+          localStorage.setItem('refreshToken', newRefreshToken);
+      } else {
+          // Provide a dummy token so the frontend doesn't panic and boot you out
+          localStorage.setItem('refreshToken', 'impersonation_active_no_refresh');
+      }*/
       
       // 3. Swap in the new Tenant token
-      localStorage.setItem('userRole', 'Tenant_admin');
+      localStorage.setItem('userRole', 'Tenant_Admin');
       localStorage.setItem('tenantId', tenantId);
       localStorage.setItem('businessName', businessName);
       localStorage.setItem('isImpersonating', 'true'); // Flag to show a "Return to Super Admin" banner
