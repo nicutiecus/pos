@@ -52,6 +52,8 @@ import AdminSettings from '../features/admin-dash/AdminSettings';
 //super
 import SuperAdminDashboard from '../features/super-admin/SuperAdminDashboard';
 import SuperAdminLogin from '../features/super-admin/SuperAdminLogin';
+import SuperAdminLayout from '../layouts/SuperAdminLayout';
+
 
 
 
@@ -77,7 +79,14 @@ const AppRouter: React.FC = () => {
       {/* --- NEW: SUPER ADMIN ROUTES --- */}
       <Route element={<ProtectedRoute allowedRoles={['Super_Admin']} />}>
         {/* If you build a SuperAdminLayout later with a sidebar, wrap it here like <Route path="/super-admin" element={<SuperAdminLayout />}> */}
-        <Route path="/super-admin" element={<SuperAdminDashboard />} />
+        
+        <Route path="/super-admin" element={<SuperAdminLayout />} >
+          <Route index element={<Navigate to ='dashboard'/>} />
+          <Route path="dashboard" element={<SuperAdminDashboard/>}/>
+
+
+
+        </Route>
       </Route>
 
       {/* CASHIER POS ROUTES (Wrapped in POSLayout) */}
