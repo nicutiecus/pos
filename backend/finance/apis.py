@@ -3,13 +3,16 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
 from .models import Expense
+from users.permissions import HasRequiredPermission
 
 from .serializers import ExpenseCreateSerializer, ExpenseListSerializer
 from .services import record_expense_service
 from .selectors import get_expenses
 
 class ExpenseApi(views.APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasRequiredPermission]
+
+    required_permission= "view_expenses"
 
     def get(self, request):
         branch_id = request.GET.get('branch_id')

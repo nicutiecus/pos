@@ -274,6 +274,17 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
         for change in price_changes_qs
     ]
 
+    #credit sales
+    credit_sales = CustomerLedger.objects.filter(
+        tenant=user.tenant,
+        # Ensure 'PAYMENT' matches your exact choice for a debt repayment
+        transaction_type=CustomerLedger.TransactionType.SALE, 
+        created_at__date=report_date
+    ).aggregate(
+        total_credit_sales=Coalesce(Sum('amount'), Decimal('0.00'), output_field=DecimalField())
+    )
+
+
     # 7. Construct Final Payload
     return {
         "report_date": report_date.strftime("%Y-%m-%d"),
@@ -282,6 +293,7 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
             "total_sales_revenue": sales_aggregates['total_revenue'],
             "total_sales_profit": total_profit,
             "total_debt_repayment_collected": debt_repayments['total_repaid'],
+            "total_credit_sales": credit_sales['total_credit_sales'],
             "number_of_active_cashiers": sales_aggregates['cashier_count'],
         },
         "payment_methods_breakdown": payment_breakdown,

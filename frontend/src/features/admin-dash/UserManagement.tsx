@@ -1,7 +1,8 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import api from '../../api/axiosInstance';
 import { isAxiosError } from 'axios';
-import ChangePasswordModal from './ChangePasswordModal'; // Ensure path is correct
+import ChangePasswordModal from './ChangePasswordModal';
+import UserSettingsModal from './UserSettingsModal'; // --- NEW IMPORT ---
 
 // --- Types ---
 interface Branch {
@@ -16,7 +17,9 @@ interface User {
   last_name: string;  
   role: 'Branch_Manager' | 'Cashier' | 'Tenant_Admin';
   branch_name?: string;
-  is_active?: boolean; // Added for status toggling
+  branch_id?: string | number; // Added to pass to modal
+  is_active?: boolean; 
+  permissions?: string[]; // --- NEW: Track permissions ---
 }
 
 interface NewUserPayload {
@@ -39,6 +42,7 @@ const UserManagement: React.FC = () => {
 
   // Modal State
   const [passwordModalUser, setPasswordModalUser] = useState<{ id: number; name: string } | null>(null);
+  const [editModalUser, setEditModalUser] = useState<User | null>(null); // --- NEW MODAL STATE ---
 
   // Form State
   const [formData, setFormData] = useState<NewUserPayload>({
@@ -56,7 +60,7 @@ const UserManagement: React.FC = () => {
       try {
         const [usersRes, branchesRes] = await Promise.all([
           api.get('/staff'),
-          api.get('/branches') // Adjust if branch endpoint is different
+          api.get('/branches') 
         ]);
         setUsers(usersRes.data);
         setBranches(branchesRes.data);
@@ -90,7 +94,7 @@ const UserManagement: React.FC = () => {
       };
 
       const res = await api.post('/staff/', payload);
-      setUsers([res.data, ...users]); // Add to top of list
+      setUsers([res.data, ...users]); 
       setSuccessMsg("User created successfully!");
       setFormData({
         first_name: '', last_name: '', email: '', password: '', role: 'Cashier', branchId: ''
@@ -125,6 +129,14 @@ const UserManagement: React.FC = () => {
     } catch (err: any) {
       alert(`Failed to ${actionText} user: ${err.response?.data?.message || err.message}`);
     }
+  };
+
+  // --- NEW: Handle save from settings modal ---
+  const handleSaveUserSettings = (updatedUser: User) => {
+    setUsers(prevUsers => 
+      prevUsers.map(user => user.id === updatedUser.id ? updatedUser : user)
+    );
+    setEditModalUser(null);
   };
 
   return (
@@ -205,7 +217,7 @@ const UserManagement: React.FC = () => {
               <tr><td colSpan={5} className="p-8 text-center text-gray-400">No users found.</td></tr>
             ) : (
               users.map(user => {
-                const isActive = user.is_active !== false; // Default to true if undefined
+                const isActive = user.is_active !== false; 
                 return (
                 <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -238,7 +250,17 @@ const UserManagement: React.FC = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end gap-3">
+                    <div className="flex justify-end gap-2">
+                      
+                      {/* --- NEW: Settings / Edit Button --- */}
+                      <button 
+                        onClick={() => setEditModalUser(user)}
+                        className="text-gray-600 hover:text-gray-900 bg-gray-100 px-3 py-1.5 rounded-md transition-colors"
+                        title="Edit Role & Permissions"
+                      >
+                        ⚙️ Edit
+                      </button>
+
                       <button 
                         onClick={() => setPasswordModalUser({ id: user.id, name: `${user.first_name} ${user.last_name}` })}
                         className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1.5 rounded-md transition-colors"
@@ -254,7 +276,7 @@ const UserManagement: React.FC = () => {
                             : 'text-green-600 bg-green-50 hover:bg-green-100'
                         }`}
                       >
-                        {isActive ? '🚫 Deactivate' : '✅ Activate'}
+                        {isActive ? '🚫' : '✅'}
                       </button>
                     </div>
                   </td>
@@ -266,11 +288,21 @@ const UserManagement: React.FC = () => {
         )}
       </div>
 
+      {/* --- MODALS --- */}
       {passwordModalUser && (
         <ChangePasswordModal 
           userId={passwordModalUser.id}
           userName={passwordModalUser.name}
           onClose={() => setPasswordModalUser(null)}
+        />
+      )}
+
+      {editModalUser && (
+        <UserSettingsModal 
+          user={editModalUser}
+          branches={branches}
+          onClose={() => setEditModalUser(null)}
+          onSave={handleSaveUserSettings}
         />
       )}
     </div>

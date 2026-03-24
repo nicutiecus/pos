@@ -1,11 +1,15 @@
-import React from 'react';
+import React, {useState} from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-
+ 
 const ManagerLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const branchId = localStorage.getItem('branchId');
+  const userRole = localStorage.getItem('userRole');
+  const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '[]');
+  const canViewExpenses = userRole === 'Tenant_Admin' || userRole === 'Super_Admin' || userPermissions.includes('view_expenses');
 
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login');
@@ -28,24 +32,54 @@ const ManagerLayout: React.FC = () => {
             <span>📊</span>
             <span className="font-medium">Overview</span>
           </Link>
+          <Link to="/POS" className="p-2 hover:bg-gray-800 rounded transition-colors">POS</Link>
+
+           {/* --- INVENTORY MANAGEMENT DROPDOWN --- */}
+                    <div className="flex flex-col">
+                      <button 
+                        onClick={() => setIsInventoryOpen(!isInventoryOpen)}
+                        className="w-full p-2 hover:bg-gray-800 rounded flex justify-between items-center transition-colors outline-none"
+                      >
+                        <span className="font-medium">Inventory Management</span>
+                        <svg 
+                          className={`w-4 h-4 transform transition-transform duration-200 ${isInventoryOpen ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      
+                      {/* Expanded Links */}
+                      {isInventoryOpen && (
+                        <div className="flex flex-col mt-1 ml-4 pl-2 border-l-2 border-gray-700 space-y-1 animate-fade-in">
+                          {/*<Link to="/manager/inventory-batches" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                            Inventory Batches
+                          </Link>
+                          */}
+                          <Link to="/manager/inventory" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                            Branch Stock
+                          </Link>
+                        
+                          <Link to="/manager/transfer" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                            Stock Transfers
+                          </Link>
+                          <Link to="/manager/inventory-logs" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                            Audit Logs
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                    {/* --- END DROPDOWN --- */}
           
-          <Link to="/manager/receive" 
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${isActive('/manager/receive') ? 'bg-blue-600 text-white' : 'hover:bg-slate-700 text-slate-300'}`}>
-            <span>🚛</span>
-            <span className="font-medium">Receive Stock</span>
-          </Link>
 
-          <Link to="/manager/products" 
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${isActive('/manager/products') ? 'bg-blue-600 text-white' : 'hover:bg-slate-700 text-slate-300'}`}>
-            <span>📦</span>
-            <span className="font-medium">Inventory List</span>
-          </Link>
-
-          <Link to="/manager/product-catalog" 
+          {/*<Link to="/manager/product-catalog" 
             className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${isActive('/manager/product-catalog') ? 'bg-blue-600 text-white' : 'hover:bg-slate-700 text-slate-300'}`}>
             <span>📦</span>
             <span className="font-medium">Product Catalog</span>
-          </Link>
+          </Link> 
+          */}
 
           
           <Link to="/manager/customers" 
@@ -54,11 +88,14 @@ const ManagerLayout: React.FC = () => {
             <span className="font-medium">Customers</span>
           </Link>
 
+          { canViewExpenses && (
           <Link to="/manager/expenses" 
             className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${isActive('/manager/expenses') ? 'bg-blue-600 text-white' : 'hover:bg-slate-700 text-slate-300'}`}>
             <span>🧾</span>
             <span className="font-medium">Expenses</span>
           </Link>
+          )
+          }
 
           {/* Placeholder for future features */}
           <div className="pt-4 mt-4 border-t border-slate-700">

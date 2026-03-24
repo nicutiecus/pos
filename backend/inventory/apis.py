@@ -1,6 +1,7 @@
 from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from users.permissions import HasRequiredPermission
 from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            CategorySerializer, InventoryLogSerializer, UpdateProductPriceSerializer,
                            StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer,
@@ -82,7 +83,9 @@ class ExpiringStockApi(views.APIView):
 
 
 class ProductCreateApi(views.APIView):
-    permission_classes = [IsAuthenticated] # Optional: Add IsTenantAdmin
+    permission_classes = [IsAuthenticated, HasRequiredPermission]
+
+    required_permission= 'create_products'
 
     def get(self,request):
         

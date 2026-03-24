@@ -21,7 +21,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ userId, userN
     setIsSubmitting(true);
     try {
       await api.patch(`/staff/${userId}/`, {
-        new_password: newPassword
+        password: newPassword
       });
       alert(`Password for ${userName} has been successfully updated.`);
       onClose();

@@ -249,14 +249,14 @@ const CustomerManagement: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-3">
                                         
-                                        {customer.current_debt > 0 && (
+                                        {/*customer.current_debt > 0 && (
                                             <button 
                                                 onClick={() => handleOpenPayment(customer)} 
                                                 className="text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded shadow-sm transition-colors"
                                             >
                                                 💳 Pay
                                             </button>
-                                        )}
+                                        )*/}
                                         <button onClick={() => handleViewLedger(customer)} className="text-blue-600 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded">
                                             📓 Ledger
                                         </button>

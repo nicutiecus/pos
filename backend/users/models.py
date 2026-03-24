@@ -78,7 +78,9 @@ class User(AbstractUser):
 
     # --- Role & Scoping ---
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.CASHIER)
-    
+
+    custom_permissions = models.JSONField(default=list, blank=True)
+   
     # If Null, and role is Tenant_Admin -> Has access to ALL branches.
     # If Set, user is locked to this specific branch.
     branch = models.ForeignKey(

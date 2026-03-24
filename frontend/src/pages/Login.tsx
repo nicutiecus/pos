@@ -15,6 +15,8 @@ interface LoginResponse {
     branch_id: number | null;
     first_name: string;
     branch_name: string;
+    permissions: string[];
+   
 
   };
 }
@@ -36,28 +38,25 @@ const Login: React.FC = () => {
     setError(null);
 
     try {
-      // 2. Call your backend
+      
       const response = await api.post<LoginResponse>('/auth/login/', credentials);
 
-      // DEBUG: Look at this in your browser console to see exactly what the backend sends
       console.log("Full Login Response:", response.data);
 
-      // DEBUG: See exactly what the server sent
-      //console.log("SERVER RESPONSE:", response.data);
+     
       
       const { access, refresh, user } = response.data;
 
-      // DEBUG: Check the role specifically
-      //console.log("USER ROLE:", user.role); 
-      //console.log("IS ADMIN CHECK:", user.role === 'Tenant_Admin');
+    
 
-      // 3. Store the 'access' token
+      // 
       localStorage.setItem('accessToken', access); 
-      localStorage.setItem('refreshToken', refresh); // Good practice to store this too
+      localStorage.setItem('refreshToken', refresh);
       localStorage.setItem('userRole', user.role);
       localStorage.setItem('userName', user.first_name || ''); 
       localStorage.setItem('branchName', user.branch_name || '');
       localStorage.setItem('branchId', user.branch_id?.toString() ||'' );
+      localStorage.setItem('userPermissions', JSON.stringify(user.permissions || []))
       
       
       if (user.tenant_id) {

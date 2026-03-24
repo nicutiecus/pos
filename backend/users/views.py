@@ -1,6 +1,7 @@
 # users/views.py
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import TenantTokenObtainPairSerializer, TenantRegistrationSerializer, StaffCreationSerializer
+from .serializers import (TenantTokenObtainPairSerializer, TenantRegistrationSerializer, 
+                          StaffCreationSerializer, StaffUpdateSerializer)
 from rest_framework import generics, viewsets
 from rest_framework.permissions import AllowAny
 from .permissions import IsTenantAdmin
@@ -27,3 +28,8 @@ class StaffViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Admin can see all staff in their tenant
         return User.objects.filter(tenant=self.request.user.tenant)
+    
+    def get_serializer_class(self):
+        if self.action in ['update', 'partial_update']:
+            return StaffUpdateSerializer
+        return StaffCreationSerializer

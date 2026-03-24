@@ -128,19 +128,25 @@ const AppRouter: React.FC = () => {
 <Route element={<ProtectedRoute allowedRoles={['Branch_Manager']} />}>
   <Route path="/manager" element={<ManagerLayout />}>
   {/* Stock transfer */}
-  <Route path="transfer" element={<StockTransferForm />} />
-  <Route path="transfer2" element={<StockTransfers />} />
+
+  <Route path="transfer" element={<StockTransfers />} />
     {/* Dashboard Home */}
     <Route index element={<ManagerDashboard />} />
 
     {/* Finances */}
     <Route path="expenses" element={<ExpenseManagement/>}/>
     
-    {/* Reusing the Inventory components we built earlier */}
+    {/* Inventory components*/}
     <Route path="products" element={<ProductList />} />
     <Route path="receive" element={<InventoryReceiving />} />
     <Route path="product-catalog" element={<ProductCatalog />} />
     <Route path="inventory" element={<InventoryManagement/>} />
+    <Route path="inventory/remove" element={<StockRemoval/>}/>
+    <Route path ="categories" element={<CategoryManagement/>}/>
+    <Route path="inventory-batches" element={<InventoryBatches/>} />
+     <Route path="inventory-logs" element={<InventoryLogs/>} />
+     <Route path="inventory/remove" element={<StockRemoval/>}/>
+
     
     <Route path ="reports" element={<ReportsDashboard/>}/>
     {/* Placeholder for staff management */}

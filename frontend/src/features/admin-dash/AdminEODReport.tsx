@@ -25,6 +25,7 @@ export interface EODReportData {
   total_sales_revenue: number;
   total_sales_profit: number;
   total_debt_repayment_collected: number;
+  total_credit_sales: number;
   number_of_active_cashiers: number;
 }
   payment_methods_breakdown: PaymentMethodTotal[];
@@ -155,6 +156,10 @@ const AdminEODReport: React.FC = () => {
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-purple-500">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Debt Repayments Collected</p>
                     <p className="text-2xl font-black text-gray-900">₦{Number(reportData.summary?.total_debt_repayment_collected || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-purple-500">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Credit Sales</p>
+                    <p className="text-2xl font-black text-gray-900">₦{Number(reportData.summary?.total_credit_sales || 0).toLocaleString()}</p>
                 </div>
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-orange-500">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Active Cashiers</p>

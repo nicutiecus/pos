@@ -5,6 +5,18 @@ from .models import User, Tenant
 from rest_framework import serializers
 
 
+VALID_PERMISSIONS = [
+    'view_expenses',
+    'view_eod_reports',
+    'manage_inventory',
+    'void_sales',
+    'issue_refunds',
+    'edit_product_prices',
+    'create_products',
+    'transfer_stock'
+]
+
+
 class TenantTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -45,7 +57,8 @@ class TenantTokenObtainPairSerializer(TokenObtainPairSerializer):
             'first_name': self.user.first_name,
             'tenant_id': self.user.tenant.id if self.user.tenant else None,
             'branch_id': self.user.branch.id if self.user.branch else None,
-            'branch_name': self.user.branch.name if self.user.branch else None
+            'branch_name': self.user.branch.name if self.user.branch else None,
+            'permissions': self.user.custom_permissions
             
         }
         
@@ -91,6 +104,10 @@ class TenantRegistrationSerializer(serializers.ModelSerializer):
 
 
 class StaffCreationSerializer(serializers.ModelSerializer):
+    custom_permissions=serializers.ListField(child=serializers.ChoiceField(choices=VALID_PERMISSIONS),
+                                             required=False, default=list)
+
+
     branch_id = serializers.UUIDField(write_only=True)
     password = serializers.CharField(write_only=True)
     first_name = serializers.CharField(required=True)
@@ -98,7 +115,7 @@ class StaffCreationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'password', 'role', 'branch_id', 'first_name', 'last_name', 'branch']
+        fields = ['id', 'email', 'password', 'role', 'branch_id', 'first_name', 'last_name', 'branch', 'custom_permissions']
 
     def validate_branch_id(self, value):
         user = self.context['request'].user
@@ -139,12 +156,17 @@ class StaffCreationSerializer(serializers.ModelSerializer):
         return instance
 
 
-"""
+
 class StaffUpdateSerializer(serializers.ModelSerializer):
+
+    custom_permissions = serializers.ListField(
+        child=serializers.ChoiceField(choices=VALID_PERMISSIONS),
+        required=False
+    )
     class Meta:
         model = User
         # Include the fields you want them to be able to update
-        fields = ['is_active', 'password', 'first_name', 'last_name'] 
+        fields = ['is_active', 'password', 'first_name', 'last_name','custom_permissions'] 
         
         # Security: Make sure the password can NEVER be read in a GET request
         extra_kwargs = {
@@ -167,4 +189,4 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-        """
+        
