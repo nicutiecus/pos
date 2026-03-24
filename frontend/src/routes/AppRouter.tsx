@@ -25,7 +25,7 @@ import UserManagement from '../features/admin-dash/UserManagement';
 import ProductCatalog from '../features/inventory/ProductCatalog';
 import ProductList from '../features/inventory/ProductList';
 import InventoryReceiving from '../features/inventory/InventoryReceiving';
-import StockTransferForm from '../features/inventory/transfers/StockTransferForm';
+//import StockTransferForm from '../features/inventory/transfers/StockTransferForm';
 import CategoryManagement from '../features/inventory/CategoryManagement';
 import InventoryManagement from '../features/inventory/InventoryManagement';
 import CustomerManagement from '../features/customers/CustomerManagement';

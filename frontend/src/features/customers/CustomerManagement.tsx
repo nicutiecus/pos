@@ -47,7 +47,7 @@ const CustomerManagement: React.FC = () => {
 
   // 3. Debt Repayment (NEW)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentCustomer, setPaymentCustomer] = useState<Customer | null>(null);
+  const [paymentCustomer, {/*setPaymentCustomer*/}] = useState<Customer | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
       amount: '',
@@ -121,7 +121,7 @@ const CustomerManagement: React.FC = () => {
   };
 
   // --- NEW: Payment Handlers ---
-  const handleOpenPayment = (customer: Customer) => {
+ {/* const handleOpenPayment = (customer: Customer) => {
       setPaymentCustomer(customer);
       // Auto-fill the amount with their total debt for convenience
       setPaymentForm({
@@ -131,6 +131,7 @@ const CustomerManagement: React.FC = () => {
       });
       setIsPaymentModalOpen(true);
   };
+*/}
 
   const handleProcessPayment = async (e: React.FormEvent) => {
       e.preventDefault();
