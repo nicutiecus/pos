@@ -138,10 +138,10 @@ const AppRouter: React.FC = () => {
     
     {/* Inventory components*/}
     <Route path="products" element={<ProductList />} />
-    <Route path="receive" element={<InventoryReceiving />} />
-    <Route path="product-catalog" element={<ProductCatalog />} />
+    {/*<Route path="receive" element={<InventoryReceiving />} />*/}
+
     <Route path="inventory" element={<InventoryManagement/>} />
-    <Route path="inventory/remove" element={<StockRemoval/>}/>
+     <Route path="inventory/receive" element={<InventoryReceiving/>}/>
     <Route path ="categories" element={<CategoryManagement/>}/>
     <Route path="inventory-batches" element={<InventoryBatches/>} />
      <Route path="inventory-logs" element={<InventoryLogs/>} />

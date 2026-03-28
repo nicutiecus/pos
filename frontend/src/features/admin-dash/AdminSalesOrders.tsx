@@ -53,7 +53,7 @@ const AdminSalesOrders: React.FC = () => {
   const [hasNext, setHasNext] = useState(false);
   const [hasPrev, setHasPrev] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  
 
   // Modal Fetching State
   const [selectedOrderId, setSelectedOrderId] = useState<string | number | null>(null);
@@ -61,28 +61,17 @@ const AdminSalesOrders: React.FC = () => {
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  // 1. Debounce Search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
 
-  // 2. Reset Page on New Search
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearchTerm]);
+  
 
-  // 3. Fetch Order List
-  useEffect(() => {
+  
     const fetchOrders = async () => {
       setIsLoading(true);
       setError(null);
       try {
         // NOTE: Adjust this endpoint to match your Django URL for listing sales orders
         const response = await api.get('/sales/list/', {
-            params: { page: currentPage, search: debouncedSearchTerm }
+            params: { page: currentPage, search: searchTerm }
         });
 
         const data = response.data;
@@ -98,9 +87,20 @@ const AdminSalesOrders: React.FC = () => {
         setIsLoading(false);
       }
     };
+// 2. Trigger fetch on page/search change (with built-in debounce)
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchOrders();
+    }, 500);
 
-    fetchOrders();
-  }, [currentPage, debouncedSearchTerm]);
+    // Cleanup the timeout if the user types again before 500ms
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, currentPage]);
+
+  // 3. Reset to page 1 ONLY when the search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   // 4. Fetch Individual Order Details
   useEffect(() => {
@@ -191,7 +191,7 @@ const AdminSalesOrders: React.FC = () => {
                 {orders.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-6 py-12 text-center text-gray-400 font-medium">
-                      {debouncedSearchTerm ? 'No matching sales found.' : 'No sales orders available.'}
+                      {searchTerm ? 'No matching sales found.' : 'No sales orders available.'}
                     </td>
                   </tr>
                 ) : (

@@ -249,15 +249,14 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
     # 5. Total Debt Repayment Made
     debt_repayments = CustomerLedger.objects.filter(
         tenant=user.tenant,
-        # Ensure 'PAYMENT' matches your exact choice for a debt repayment
+        branch_id = user.branch_id,
         transaction_type=CustomerLedger.TransactionType.PAYMENT, 
         created_at__date=report_date
     ).aggregate(
         total_repaid=Coalesce(Sum('amount'), Decimal('0.00'), output_field=DecimalField())
     )
 
-    # 6. Price Changes During the Day (Using your dedicated model)
-    # Adjust the field names (product__name, old_price, new_price) to match your exact model fields!
+    # 6. Price Changes During the Day 
     price_changes_qs = ProductPriceHistory.objects.filter(
         tenant=user.tenant,
         created_at__date=report_date
@@ -277,6 +276,7 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
     #credit sales
     credit_sales = CustomerLedger.objects.filter(
         tenant=user.tenant,
+        branch_id = user.branch_id,
         # Ensure 'PAYMENT' matches your exact choice for a debt repayment
         transaction_type=CustomerLedger.TransactionType.SALE, 
         created_at__date=report_date

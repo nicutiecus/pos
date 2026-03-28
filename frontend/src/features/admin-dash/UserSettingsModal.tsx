@@ -63,6 +63,7 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ user, branches, o
       };
 
       const res = await api.patch(`/staff/${user.id}/`, payload);
+      
       onSave(res.data); // Pass the updated user back to the parent table
     } catch (err) {
       setError(isAxiosError(err) ? err.response?.data?.message || 'Failed to update user settings.' : 'An error occurred.');

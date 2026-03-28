@@ -76,9 +76,6 @@ class SalesListApi(views.APIView):
         # 4. Serialize ONLY the 10 items for this specific page
         serializer = SalesOrderListSerializer(paginated_sales, many=True)
         
-        # 5. Return the special paginated response format
-       
-        serializer = SalesOrderListSerializer(sales, many=True)
     
         return paginator.get_paginated_response(serializer.data)
 

@@ -44,6 +44,7 @@ const EditablePriceCell: React.FC<EditablePriceCellProps> = ({ productId, initia
   const [isEditing, setIsEditing] = useState(false);
   const [price, setPrice] = useState<string>(String(initialPrice));
   const [isSaving, setIsSaving] = useState(false);
+   
 
   const handleSave = async () => {
     const numericPrice = Number(price);
@@ -137,6 +138,11 @@ const ProductList: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const userRole = localStorage.getItem('userRole');
+  const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '[]');
+  const canCreateProducts = userRole === 'Tenant_Admin' || userRole === 'Super_Admin' || userPermissions.includes('create_products');
+
 
   // Form State
   const [newProduct, setNewProduct] = useState<NewProductPayload>({
@@ -253,12 +259,15 @@ const ProductList: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Product Master</h1>
           <p className="text-sm text-gray-500">Define the items your store sells.</p>
         </div>
+        {canCreateProducts && (
         <button onClick={() => setShowCreateForm(!showCreateForm)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium">
           {showCreateForm ? 'Cancel' : '+ Define New Product'}
         </button>
+
+        )}
       </div>
 
-      {showCreateForm && (
+      {showCreateForm &&  (
         <div className="bg-white border border-blue-200 rounded-lg p-6 shadow-md animate-fade-in-down">
           <h3 className="text-sm font-bold text-gray-800 uppercase mb-4">New Product Definition</h3>
           {errorMsg && <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded">{errorMsg}</div>}
@@ -291,11 +300,11 @@ const ProductList: React.FC = () => {
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                 <div>
+                 {/*<div>
                     <label className="block text-sm font-medium text-gray-700">Cost Price (₦)</label>
                     <input type="number" name="cost_price" value={newProduct.cost_price} onChange={handleCreateChange} required placeholder="0.00"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" />
-                 </div>
+                 </div>*/}
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Selling Price (₦)</label>
                     <input type="number" name="selling_price" value={newProduct.selling_price} onChange={handleCreateChange} required placeholder="0.00"

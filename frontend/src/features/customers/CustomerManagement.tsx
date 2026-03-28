@@ -35,6 +35,12 @@ const CustomerManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDebtorsOnly, setShowDebtorsOnly] = useState(false);
 
+  // --- Pagination & Sorting State ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [sortField, setSortField] = useState('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
   // --- Modal States ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -45,26 +51,40 @@ const CustomerManagement: React.FC = () => {
   const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
   const [isLoadingLedger, setIsLoadingLedger] = useState(false);
 
-  // 3. Debt Repayment (NEW)
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentCustomer, {/*setPaymentCustomer*/}] = useState<Customer | null>(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({
-      amount: '',
-      method: 'Cash',
-      notes: 'Debt repayment'
-  });
+  
 
   // --- Fetch Data ---
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    // Wait 500ms after the user stops typing before fetching
+    const delayDebounceFn = setTimeout(() => {
+      fetchCustomers();
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, showDebtorsOnly, sortField, sortOrder, currentPage]);
 
   const fetchCustomers = async () => {
     setIsLoading(true);
     try {
-      const res = await api.get('/sales/customers/');
-      setCustomers(res.data);
+    // Format the ordering string for Django (e.g., "-current_debt" for descending)
+      const ordering = sortOrder === 'desc' ? `-${sortField}` : sortField;
+      const params = new URLSearchParams ({
+        page: currentPage.toString(),
+        search: searchTerm,
+        ordering: ordering
+      })
+
+      if (showDebtorsOnly) params.append('has_debt', 'true');
+
+      const res = await api.get(`/sales/customers/?${params.toString()}`);
+      if (res.data.results) {
+        setCustomers(res.data.results);
+        // Assuming your backend returns 10 items per page
+        setTotalPages(Math.ceil(res.data.count / 10)); 
+      } else {
+        // Fallback if backend isn't paginated yet
+        setCustomers(res.data);
+      }
     } catch (err) {
       console.error("Failed to fetch customers", err);
     } finally {
@@ -73,6 +93,18 @@ const CustomerManagement: React.FC = () => {
   };
 
   // --- Handlers ---
+
+  const handleSort = (field: string) => {
+      if (sortField === field) {
+          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      } else {
+          setSortField(field);
+          setSortOrder('asc');
+      }
+  };
+
+
+
   const handleEditClick = (customer: Customer) => {
     setEditingCustomer({ ...customer });
     setIsEditModalOpen(true);
@@ -133,42 +165,22 @@ const CustomerManagement: React.FC = () => {
   };
 */}
 
-  const handleProcessPayment = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!paymentCustomer || !branchId) return;
-
-      setIsProcessingPayment(true);
-      try {
-          const payload = {
-              branch_id: branchId,
-              amount: Number(paymentForm.amount),
-              method: paymentForm.method,
-              notes: paymentForm.notes
-          };
-
-          // NOTE: Adjust this URL to match your exact Django endpoint path
-          const res = await api.post(`/sales/customers/${paymentCustomer.id}/pay-debt/`, payload);
-          
-          const data = res.data; // The JSON response you provided
-
-          alert(`✅ ${data.message}\n\nAmount Paid: ₦${Number(data.amount_paid).toLocaleString()}\nNew Balance: ₦${Number(data.new_balance).toLocaleString()}\nReceipt #: ${data.invoice_number}`);
-          
-          setIsPaymentModalOpen(false);
-          await fetchCustomers(); // Refresh the list to show new debt balance
-          
-      } catch (err: any) {
-          alert(`Payment failed: ${err.response?.data?.message || err.message}`);
-      } finally {
-          setIsProcessingPayment(false);
-      }
-  };
+  
 
   // --- Derived Data ---
-  const filteredCustomers = customers.filter(c => {
+  {/*
+    const filteredCustomers = customers.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.phone.includes(searchTerm);
     const matchesDebt = showDebtorsOnly ? c.current_debt > 0 : true;
     return matchesSearch && matchesDebt;
   });
+  */}
+
+  // Helper for rendering sort arrows
+  const renderSortIndicator = (field: string) => {
+      if (sortField !== field) return <span className="text-gray-300 ml-1">↕</span>;
+      return sortOrder === 'asc' ? <span className="text-blue-600 ml-1">↑</span> : <span className="text-blue-600 ml-1">↓</span>;
+  };
 
   const totalOutstandingDebt = customers.reduce((sum, c) => sum + Number(c.current_debt), 0);
 
@@ -227,18 +239,24 @@ const CustomerManagement: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer Name</th>
+                            <th onClick={() => handleSort('name')} className="cursor-pointer hover:bg-gray-100 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase select-none transition-colors">
+                                Customer Name {renderSortIndicator('name')}
+                            </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Credit Limit</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Current Debt</th>
+                            <th onClick={() => handleSort('credit_limit')} className="cursor-pointer hover:bg-gray-100 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase select-none transition-colors">
+                                Credit Limit {renderSortIndicator('credit_limit')}
+                            </th>
+                            <th onClick={() => handleSort('current_debt')} className="cursor-pointer hover:bg-gray-100 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase select-none transition-colors">
+                                Current Debt {renderSortIndicator('current_debt')}
+                            </th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
-                        {filteredCustomers.length === 0 ? (
+                        {customers.length === 0 ? (
                             <tr><td colSpan={5} className="p-8 text-center text-gray-400">No customers found.</td></tr>
                         ) : (
-                            filteredCustomers.map(customer => (
+                            customers.map(customer => (
                                 <tr key={customer.id} className="hover:bg-blue-50 transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{customer.name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{customer.phone}</td>
@@ -272,73 +290,37 @@ const CustomerManagement: React.FC = () => {
                 </table>
             </div>
         )}
+
+            {/* --- PAGINATION FOOTER --- */}
+        {!isLoading && totalPages > 1 && (
+            <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+                <span className="text-sm text-gray-500">
+                    Page <span className="font-bold text-gray-800">{currentPage}</span> of <span className="font-bold text-gray-800">{totalPages}</span>
+                </span>
+                <div className="flex space-x-2">
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Previous
+                    </button>
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Next
+                    </button>
+                </div>
+            </div>
+        )}
+      
+
       </div>
 
-      {/* --- REPAYMENT MODAL (NEW) --- */}
-      {isPaymentModalOpen && paymentCustomer && (
-          <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-down">
-                  <div className="bg-green-50 p-5 border-b border-green-100 flex justify-between items-start">
-                      <div>
-                          <h3 className="font-bold text-lg text-green-900">Process Repayment</h3>
-                          <p className="text-sm text-green-700">For {paymentCustomer.name}</p>
-                      </div>
-                      <button onClick={() => setIsPaymentModalOpen(false)} className="text-green-600 hover:text-red-500 text-xl leading-none">&times;</button>
-                  </div>
-                  
-                  <div className="p-5 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-                      <span className="text-sm font-bold text-gray-500 uppercase">Total Owed:</span>
-                      <span className="text-xl font-extrabold text-red-600">₦{Number(paymentCustomer.current_debt).toLocaleString()}</span>
-                  </div>
+      
 
-                  <form onSubmit={handleProcessPayment} className="p-5 space-y-4">
-                      <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Payment Amount (₦)</label>
-                          <input 
-                              type="number" 
-                              required 
-                              min="1"
-                              max={paymentCustomer.current_debt} // Prevent overpaying in this specific modal
-                              value={paymentForm.amount} 
-                              onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})}
-                              className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-lg font-bold text-gray-900" 
-                          />
-                      </div>
-                      
-                      <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Payment Method</label>
-                          <select 
-                              value={paymentForm.method} 
-                              onChange={e => setPaymentForm({...paymentForm, method: e.target.value})}
-                              className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                          >
-                              <option value="Cash">Cash</option>
-                              <option value="Transfer">Bank Transfer</option>
-                              <option value="POS">POS / Card</option>
-                          </select>
-                      </div>
-
-                      <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Notes (Optional)</label>
-                          <input 
-                              type="text" 
-                              value={paymentForm.notes} 
-                              onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})}
-                              className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm" 
-                              placeholder="e.g. Paid via GTBank transfer"
-                          />
-                      </div>
-                      
-                      <div className="pt-4 flex justify-end space-x-3">
-                          <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancel</button>
-                          <button type="submit" disabled={isProcessingPayment || !paymentForm.amount} className="px-5 py-2.5 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 transition-colors shadow-md">
-                              {isProcessingPayment ? 'Processing...' : 'Confirm Payment'}
-                          </button>
-                      </div>
-                  </form>
-              </div>
-          </div>
-      )}
 
       {/* --- EDIT MODAL --- */}
       {isEditModalOpen && editingCustomer && (

@@ -19,7 +19,7 @@ interface User {
   branch_name?: string;
   branch_id?: string | number; // Added to pass to modal
   is_active?: boolean; 
-  permissions?: string[]; // --- NEW: Track permissions ---
+  custom_permissions?: string[];
 }
 
 interface NewUserPayload {
@@ -132,9 +132,9 @@ const UserManagement: React.FC = () => {
   };
 
   // --- NEW: Handle save from settings modal ---
-  const handleSaveUserSettings = (updatedUser: User) => {
+  const handleSaveUserSettings = (updatedData: any) => {
     setUsers(prevUsers => 
-      prevUsers.map(user => user.id === updatedUser.id ? updatedUser : user)
+      prevUsers.map(user => user.id === updatedData.id ? {...user, ...updatedData}:user)
     );
     setEditModalUser(null);
   };

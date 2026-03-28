@@ -42,6 +42,9 @@ const InventoryManagement: React.FC = () => {
 
   const branchId = localStorage.getItem('branchId');
 
+  const userRole = localStorage.getItem('userRole');
+  const basePath = userRole === 'Branch_Manager' ? '/manager' : '/admin';
+
   useEffect(() => {
     const fetchAllData = async () => {
       setIsLoading(true);
@@ -82,13 +85,13 @@ const InventoryManagement: React.FC = () => {
         <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 flex flex-col justify-center items-start shadow-sm">
           <h3 className="font-bold text-blue-900 mb-3 uppercase tracking-wider text-sm">Quick Actions</h3>
           <div className="flex flex-wrap gap-2 text-sm font-bold">
-            <Link to="/admin/inventory/receive" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm transition-colors">
+            <Link to={`${basePath}/inventory/receive`} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm transition-colors">
               + Receive
             </Link>
-            <Link to="/admin/inventory/remove" className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-100 shadow-sm transition-colors">
+            <Link to={`${basePath}/inventory/remove`} className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-100 shadow-sm transition-colors">
               - Remove
             </Link>
-            <Link to="/admin/products" className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">
+            <Link to={`${basePath}/products`} className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">
               Catalog
             </Link>
           </div>

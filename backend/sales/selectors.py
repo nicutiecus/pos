@@ -5,7 +5,7 @@ from django.db.models.functions import Coalesce
 from decimal import Decimal
 
 
-def get_sales_list(*, user, branch_id=None, search_term=None):
+def get_sales_list(*, user, branch_id=None, search_term=None, ordering=None):
     """
     Fetches sales history for the tenant.
     Optionally filters by branch.
@@ -28,12 +28,24 @@ def get_sales_list(*, user, branch_id=None, search_term=None):
     if search_term:
         query = query.filter(
             Q(id__icontains=search_term) |
-            Q(cashier__first_name__icontains=search_term) |
-            Q(cashier__last_name__icontains=search_term) |
-            Q(cashier__email__icontains=search_term)
+            Q(user__first_name__icontains=search_term) |
+            Q(customer__name__icontains=search_term) |
+            Q(user__email__icontains=search_term)
         )
+    # Define exactly which fields are safe to sort by
+    allowed_ordering_fields = [
+        'created_at', '-created_at', 
+        'total_amount', '-total_amount', 
+        'customer__name', '-customer__name',
+        'payment_status', '-payment_status'
+    ]
+    if ordering and ordering in allowed_ordering_fields:
+        query = query.order_by(ordering)
+    else:
+        # Default fallback if no ordering is provided or an invalid one is sent
+        query = query.order_by('-created_at')
 
-    return query.order_by('-created_at')# sales/selectors.py
+    return query
 
 
 def get_sale_detail(*, user, sale_id):
