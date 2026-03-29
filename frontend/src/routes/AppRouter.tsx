@@ -22,7 +22,7 @@ import BranchManagement from '../features/admin-dash/BranchManagement';
 import UserManagement from '../features/admin-dash/UserManagement';
 
 //Inventory
-import ProductCatalog from '../features/inventory/ProductCatalog';
+//import ProductCatalog from '../features/inventory/ProductCatalog';
 import ProductList from '../features/inventory/ProductList';
 import InventoryReceiving from '../features/inventory/InventoryReceiving';
 //import StockTransferForm from '../features/inventory/transfers/StockTransferForm';

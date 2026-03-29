@@ -24,7 +24,7 @@ interface LedgerEntry {
 const CustomerManagement: React.FC = () => {
   // --- Global State ---
   const userRole = localStorage.getItem('userRole');
-  const branchId = localStorage.getItem('branchId');
+  //const branchId = localStorage.getItem('branchId');
   const isAdmin = userRole === 'Tenant_Admin' || userRole === 'ADMIN';
 
   // --- Data State ---

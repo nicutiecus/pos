@@ -24,3 +24,7 @@ class PaymentAdmin(admin.ModelAdmin):
 class ShiftReportAdmin(admin.ModelAdmin):
     list_display=("shift_code","branch","variance","declared_cash")
     list_filter=("branch","start_time")
+
+@admin.register(CustomerLedger)
+class CustomerLedgerAdmin(admin.ModelAdmin):
+    list_display= ("customer","transaction_type","amount")

@@ -227,7 +227,8 @@ def create_sale_service(
                 amount=debt_amount,
                 balance_after=customer_obj.current_debt,
                 reference_id=order.id,
-                notes=f"Credit sale (Order #{str(order.id)[:8]})"
+                notes=f"Credit sale (Order #{str(order.id)[:8]})",
+                processed_by = user
             )
 
         # 7. Update Final Status
