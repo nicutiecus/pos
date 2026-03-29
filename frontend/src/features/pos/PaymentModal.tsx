@@ -58,7 +58,8 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
       try {
         const branchId = localStorage.getItem('branchId');
         const res = await api.get(`/sales/customers/?branch_id=${branchId}`);
-        setCustomers(res.data);
+        const customerArray = Array.isArray(res.data) ? res.data : res.data?.results || [];
+        setCustomers(customerArray);
       } catch (err) {
         console.error("Failed to load customers", err);
       }
@@ -198,9 +199,10 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
         setIsProcessing(false);
     }
   };
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(customerSearch.toLowerCase()) || 
-    c.phone.includes(customerSearch)
+  const safeCustomers = Array.isArray(customers) ? customers : [];
+  const filteredCustomers = safeCustomers.filter(c => 
+    c.name?.toLowerCase().includes(customerSearch.toLowerCase()) || 
+    c.phone?.includes(customerSearch)
   );
 
   return (
