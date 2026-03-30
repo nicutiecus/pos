@@ -48,8 +48,9 @@ const DebtRepaymentModal: React.FC<Props> = ({ onClose }) => {
       const search = async () => {
         try {
           const res = await api.get(`/sales/customers?search=${customerSearch}`);
+          const customerArray = Array.isArray(res.data) ? res.data : res.data?.results || [];
           // Only show customers who actually owe money
-          const debtors = res.data.filter((c: Customer) => c.current_debt > 0);
+          const debtors = customerArray.filter((c: Customer) => c.current_debt > 0);
           setCustomers(debtors);
         } catch (err) {
             console.error("Customer search failed", err);

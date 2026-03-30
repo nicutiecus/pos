@@ -16,7 +16,7 @@ interface User {
   first_name: string; 
   last_name: string;  
   role: 'Branch_Manager' | 'Cashier' | 'Tenant_Admin';
-  branch_name?: string;
+  branch?: string;
   branch_id?: string | number; // Added to pass to modal
   is_active?: boolean; 
   custom_permissions?: string[];
@@ -53,6 +53,16 @@ const UserManagement: React.FC = () => {
     role: 'Cashier',
     branchId: ''
   });
+
+  // --- Helper to get Branch Name from UUID/ID ---
+  const getBranchName = (branchIdToMatch?: string | number) => {
+    if (!branchIdToMatch) return 'All Branches (HQ)';
+    
+    // Convert both to strings to ensure safe comparison whether it's an int or UUID
+    const matchedBranch = branches.find(b => String(b.id) === String(branchIdToMatch));
+    
+    return matchedBranch ? matchedBranch.name : 'Unknown Branch';
+  };
 
   // --- Initial Fetch ---
   useEffect(() => {
@@ -238,9 +248,9 @@ const UserManagement: React.FC = () => {
                         'bg-green-100 text-green-800'}`}>
                       {user.role}
                     </span>
-                  </td>
+                  </td> 
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.branch_name || 'All Branches (HQ)'}
+                    {getBranchName(user.branch || user.branch_id) || 'All Branches (HQ)'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {isActive ? (

@@ -166,7 +166,7 @@ class StaffUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         # Include the fields you want them to be able to update
-        fields = ['is_active', 'password', 'first_name', 'last_name','custom_permissions'] 
+        fields = ['is_active', 'password', 'first_name', 'last_name','custom_permissions','role','branch']
         
         # Security: Make sure the password can NEVER be read in a GET request
         extra_kwargs = {
