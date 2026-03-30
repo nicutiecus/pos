@@ -249,7 +249,7 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
     # 5. Total Debt Repayment Made
     debt_repayments = CustomerLedger.objects.filter(
         tenant=user.tenant,
-        branch_id = user.branch_id,
+        branch_id = branch_id,
         transaction_type=CustomerLedger.TransactionType.PAYMENT, 
         created_at__date=report_date
     ).aggregate(
@@ -276,7 +276,7 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
     #credit sales
     credit_sales = CustomerLedger.objects.filter(
         tenant=user.tenant,
-        branch_id = user.branch_id,
+        branch_id = branch_id,
         # Ensure 'PAYMENT' matches your exact choice for a debt repayment
         transaction_type=CustomerLedger.TransactionType.SALE, 
         created_at__date=report_date
