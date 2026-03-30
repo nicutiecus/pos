@@ -390,7 +390,7 @@ const ProductList: React.FC = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.name}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{p.sku}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <div><span className="text-gray-500 text-xs">Cost:</span> ₦{Number(p.cost_price).toLocaleString()}</div>
+              
                                 
                                 {/* --- INLINE EDITABLE PRICE COMPONENT --- */}
                                 <EditablePriceCell 

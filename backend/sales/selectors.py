@@ -69,11 +69,16 @@ def get_sale_detail(*, user, sale_id):
 
 
 def get_customer_ledger(*, user, customer_id: str):
-    return CustomerLedger.objects.filter(
-        tenant=user.tenant, 
+    query = CustomerLedger.objects.filter(
+        tenant=user.tenant,
         customer_id=customer_id
-    ).order_by('-created_at')
-
+    ).select_related('processed_by', 'branch', 'reference_order').order_by('-created_at')
+    admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+    
+    if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
+        # If they are a standard Manager or Cashier, lock the query to their branch
+        query = query.filter(branch_id=user.branch_id)
+    return query
 
 def get_current_shift_data(*, user):
     active_branch_id = getattr(user, 'branch_id', None)

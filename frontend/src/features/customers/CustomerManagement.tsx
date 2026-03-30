@@ -41,6 +41,8 @@ const CustomerManagement: React.FC = () => {
   const [sortField, setSortField] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
+  const [globalTotalDebt, setGlobalTotalDebt] = useState(0);
+
   // --- Modal States ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -50,6 +52,8 @@ const CustomerManagement: React.FC = () => {
   const [activeLedgerCustomer, setActiveLedgerCustomer] = useState<Customer | null>(null);
   const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
   const [isLoadingLedger, setIsLoadingLedger] = useState(false);
+
+  const branchId = localStorage.getItem('branchId');
 
   
 
@@ -81,9 +85,14 @@ const CustomerManagement: React.FC = () => {
         setCustomers(res.data.results);
         // Assuming your backend returns 10 items per page
         setTotalPages(Math.ceil(res.data.count / 10)); 
+        setGlobalTotalDebt(res.data.total_outstanding_debt || 0);
+        
       } else {
         // Fallback if backend isn't paginated yet
         setCustomers(res.data);
+        setTotalPages(1)
+        setGlobalTotalDebt(res.data.reduce((sum: number, c: Customer) => sum + Number(c.current_debt), 0));
+
       }
     } catch (err) {
       console.error("Failed to fetch customers", err);
@@ -140,8 +149,13 @@ const CustomerManagement: React.FC = () => {
     setIsLoadingLedger(true);
     
     try {
+        
+        const params = new URLSearchParams();
+        if (!isAdmin && branchId) {
+          params.append('branch_id', branchId);
+      }
       // Typically an endpoint like /customers/{id}/ledger/ or filtering sales
-      const res = await api.get(`/sales/customers/${customer.id}/ledger/`);
+      const res = await api.get(`/sales/customers/${customer.id}/ledger/?${params.toString()}`);
       setLedgerData(res.data);
     } catch (err) {
       console.error("Failed to fetch ledger", err);
@@ -152,29 +166,8 @@ const CustomerManagement: React.FC = () => {
     }
   };
 
-  // --- NEW: Payment Handlers ---
- {/* const handleOpenPayment = (customer: Customer) => {
-      setPaymentCustomer(customer);
-      // Auto-fill the amount with their total debt for convenience
-      setPaymentForm({
-          amount: customer.current_debt.toString(),
-          method: 'Cash',
-          notes: 'Debt repayment'
-      });
-      setIsPaymentModalOpen(true);
-  };
-*/}
 
   
-
-  // --- Derived Data ---
-  {/*
-    const filteredCustomers = customers.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.phone.includes(searchTerm);
-    const matchesDebt = showDebtorsOnly ? c.current_debt > 0 : true;
-    return matchesSearch && matchesDebt;
-  });
-  */}
 
   // Helper for rendering sort arrows
   const renderSortIndicator = (field: string) => {
@@ -182,8 +175,7 @@ const CustomerManagement: React.FC = () => {
       return sortOrder === 'asc' ? <span className="text-blue-600 ml-1">↑</span> : <span className="text-blue-600 ml-1">↓</span>;
   };
 
-  const totalOutstandingDebt = customers.reduce((sum, c) => sum + Number(c.current_debt), 0);
-
+  
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       
@@ -195,7 +187,7 @@ const CustomerManagement: React.FC = () => {
         </div>
         <div className="bg-red-50 p-6 rounded-xl shadow-sm border border-red-100 flex flex-col justify-center items-center text-center">
             <div className="text-sm font-bold text-red-600 uppercase tracking-wider mb-1">Total Outstanding Debt</div>
-            <div className="text-3xl font-extrabold text-red-700">₦{totalOutstandingDebt.toLocaleString()}</div>
+            <div className="text-3xl font-extrabold text-red-700">₦{globalTotalDebt.toLocaleString()}</div>
         </div>
       </div>
 
@@ -346,9 +338,14 @@ const CustomerManagement: React.FC = () => {
                           <input type="number" required min="0" value={editingCustomer.credit_limit} 
                               onChange={e => setEditingCustomer({...editingCustomer, credit_limit: Number(e.target.value)})}
                               // Optional: Disable credit limit editing for non-admins if desired
-                              disabled={!isAdmin && false} 
+                              disabled={!isAdmin} 
                               className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
-                          <p className="text-xs text-gray-500 mt-1">Maximum amount this customer is allowed to owe.</p>
+                         {/* Dynamic helper text based on role */}
+                          {!isAdmin ? (
+                              <p className="text-xs text-red-500 mt-1 font-bold">Only Tenant Admins can approve or modify credit limits.</p>
+                          ) : (
+                              <p className="text-xs text-gray-500 mt-1">Maximum amount this customer is allowed to owe.</p>
+                          )}
                       </div>
                       
                       <div className="pt-4 flex justify-end space-x-3">

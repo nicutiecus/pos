@@ -32,7 +32,7 @@ class Customer(TenantAwareModel):
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
     address = models.CharField(max_length=150, null=True, blank =True)
-    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=100000.00)
+    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=1000000.00)
     current_debt = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     class Meta:

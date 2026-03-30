@@ -56,8 +56,8 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const branchId = localStorage.getItem('branchId');
-        const res = await api.get(`/sales/customers/?branch_id=${branchId}`);
+        //const branchId = localStorage.getItem('branchId');
+        const res = await api.get(`/sales/customers/?no_page=true`);
         const customerArray = Array.isArray(res.data) ? res.data : res.data?.results || [];
         setCustomers(customerArray);
       } catch (err) {
