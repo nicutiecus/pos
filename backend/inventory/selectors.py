@@ -1,9 +1,10 @@
-from django.db.models import Sum, F, Q
+from django.db.models import Sum, F, Q, DecimalField
 from django.utils import timezone
 from .models import InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory, InventoryLog
 from django.core.exceptions import PermissionDenied
 from django.core.cache import cache
 from .serializers import ProductCatalogSerializer # We use the serializer here now
+from decimal import Decimal
 
 
 
@@ -48,7 +49,10 @@ def get_organization_stock_levels(*, user):
         'branch__id', 
         'branch__name'
     ).annotate(
-        total_quantity=Sum('quantity_on_hand')
+        total_quantity=Sum('quantity_on_hand'),
+        total_value=Sum(
+            F('quantity_on_hand') * F('cost_price_at_receipt'), 
+            output_field=DecimalField())
     ).order_by('product__name', 'branch__name')
 
     # 2. Format the data into a clean JSON structure for the frontend
@@ -63,18 +67,23 @@ def get_organization_stock_levels(*, user):
                 "product_id": pid,
                 "product_name": batch['product__name'],
                 "total_organization_stock": 0,
+                "total_organization_value": Decimal(0.00),
                 "branch_breakdown": []
             }
         
         # Add the branch's stock to the organization total
         qty = batch['total_quantity']
+        val = batch['total_value'] or Decimal('0.00')
+
         formatted_data[pid]['total_organization_stock'] += qty
+        formatted_data[pid]['total_organization_value'] += val
         
         # Add the specific branch details to the breakdown array
         formatted_data[pid]['branch_breakdown'].append({
             "branch_id": batch['branch__id'],
             "branch_name": batch['branch__name'],
-            "stock": qty
+            "stock": qty,
+            "stock_value": val
         })
         
     # Return as a flat list of product dictionaries

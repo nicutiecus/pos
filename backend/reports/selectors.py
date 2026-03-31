@@ -216,25 +216,34 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
         order__created_at__date=report_date
     )
 
-    # 2. Breakdown of Items Sold
-    items_breakdown = list(sale_items_qs.values(
-        product_name=F('product__name')
-    ).annotate(
-        total_quantity=Sum('quantity'),
-        total_revenue=Sum('subtotal')
-    ).order_by('-total_quantity'))
-
-    # 3. Revenue, Profit, and Cashiers
+    #  Revenue, Profit, and Cashiers
     sales_aggregates = sales_qs.aggregate(
         total_revenue=Coalesce(Sum('total_amount'), Decimal('0.00'), output_field=DecimalField()),
         cashier_count=Count('user', distinct=True)
     )
+    actual_revenue = sales_aggregates['total_revenue']
 
-    profit_aggregates = sale_items_qs.aggregate(
-        total_cost=Coalesce(Sum(F('quantity') * F('cost_price_at_sale')), Decimal('0.00'), output_field=DecimalField()),
-        total_sales_value=Coalesce(Sum('subtotal'), Decimal('0.00'), output_field=DecimalField())
+    # 3. Total Cost of Goods Sold (Item Level)
+    cogs_aggregates = sale_items_qs.aggregate(
+        total_cost=Coalesce(Sum(F('quantity') * F('cost_price_at_sale')), Decimal('0.00'), output_field=DecimalField())
     )
-    total_profit = profit_aggregates['total_sales_value'] - profit_aggregates['total_cost']
+    total_cogs = cogs_aggregates['total_cost']
+
+    total_profit = actual_revenue - total_cogs
+
+
+    #  Breakdown of Items Sold
+    items_breakdown = list(sale_items_qs.values(
+        product_name=F('product__name')
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('subtotal'),
+        total_cost=Sum(F('quantity')* F('cost_price_at_sale')),
+        item_profit = Sum('subtotal')-Sum(F('quantity')* F('cost_price_at_sale'))
+    ).order_by('-total_quantity'))
+
+    
+
 
     # 4. Expected Cash by Payment Method
     payments_qs = Payment.objects.filter(
@@ -304,7 +313,8 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
         "report_date": report_date.strftime("%Y-%m-%d"),
         "branch_id": branch_id,
         "summary": {
-            "total_sales_revenue": sales_aggregates['total_revenue'],
+            "total_sales_revenue": actual_revenue,
+            "total_cost_of_goods": total_cogs,
             "total_sales_profit": total_profit,
             "total_debt_repayment_collected": debt_repayments['total_repaid'],
             "total_credit_sales": total_credit_sales,
