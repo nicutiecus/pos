@@ -274,15 +274,29 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
     ]
 
     #credit sales
-    credit_sales = CustomerLedger.objects.filter(
+    # Part A: Full Credit Sales (Pending) -> The entire order amount is debt
+    pending_debt = SalesOrder.objects.filter(
         tenant=user.tenant,
-        branch_id = branch_id,
-        # Ensure 'PAYMENT' matches your exact choice for a debt repayment
-        transaction_type=CustomerLedger.TransactionType.SALE, 
-        created_at__date=report_date
+        branch_id=branch_id,
+        created_at__date=report_date,
+        payment_status='Pending'  # Exact match to your model choice
     ).aggregate(
-        total_credit_sales=Coalesce(Sum('amount'), Decimal('0.00'), output_field=DecimalField())
-    )
+        total=Coalesce(Sum('total_amount'), Decimal('0.00'), output_field=DecimalField())
+    )['total']
+
+    # Part B: Partial Sales -> Only the unpaid portion is debt
+    # (Total amount minus whatever cash/transfer they actually paid upfront)
+    partial_debt = SalesOrder.objects.filter(
+        tenant=user.tenant,
+        branch_id=branch_id,
+        created_at__date=report_date,
+        payment_status='Partial'  # Exact match to your model choice
+    ).aggregate(
+        total=Coalesce(Sum(F('total_amount') - F('amount_paid')), Decimal('0.00'), output_field=DecimalField())
+    )['total']
+
+    # Combine them for the final EOD figure
+    total_credit_sales = pending_debt + partial_debt
 
 
     # 7. Construct Final Payload
@@ -293,7 +307,7 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
             "total_sales_revenue": sales_aggregates['total_revenue'],
             "total_sales_profit": total_profit,
             "total_debt_repayment_collected": debt_repayments['total_repaid'],
-            "total_credit_sales": credit_sales['total_credit_sales'],
+            "total_credit_sales": total_credit_sales,
             "number_of_active_cashiers": sales_aggregates['cashier_count'],
         },
         "payment_methods_breakdown": payment_breakdown,
