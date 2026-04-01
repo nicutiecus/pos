@@ -72,7 +72,7 @@ def get_customer_ledger(*, user, customer_id: str):
     query = CustomerLedger.objects.filter(
         tenant=user.tenant,
         customer_id=customer_id
-    ).select_related('processed_by', 'branch', 'reference_order').order_by('-created_at')
+    ).select_related('processed_by', 'branch').order_by('-created_at')
     admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
     
     if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
