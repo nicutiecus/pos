@@ -10,6 +10,9 @@ interface PaymentMethodTotal {
 interface ItemSold {
   product_name: string;
   total_quantity: number;
+  item_profit: number;
+  total_cost: number;
+  total_revenue: number;
 }
 
 interface PriceChange {
@@ -235,6 +238,9 @@ const AdminEODReport: React.FC = () => {
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Product Name</th>
                                         <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Total Qty Sold</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Total Cost</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Total Revenue</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Total Profit</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-100">
@@ -246,6 +252,15 @@ const AdminEODReport: React.FC = () => {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-blue-600 text-right">
                                                     {Number(item.total_quantity).toLocaleString()}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-blue-600 text-right">
+                                                    {Number(item.total_cost).toLocaleString()}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-blue-600 text-right">
+                                                    {Number(item.total_revenue).toLocaleString()}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-blue-600 text-right">
+                                                    {Number(item.item_profit).toLocaleString()}
                                                 </td>
                                             </tr>
                                         ))
