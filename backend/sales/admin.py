@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Customer, SalesOrder, CustomerLedger, ShiftReport, Payment
+from .models import (Customer, SalesOrder, CustomerLedger, 
+                     ShiftReport, Payment, SaleItem)
 
 class CustomerLedgerInline(admin.TabularInline):
     model= CustomerLedger
@@ -28,3 +29,8 @@ class ShiftReportAdmin(admin.ModelAdmin):
 @admin.register(CustomerLedger)
 class CustomerLedgerAdmin(admin.ModelAdmin):
     list_display= ("customer","transaction_type","amount")
+
+
+@admin.register(SaleItem)
+class SaleItemAdmin(admin.ModelAdmin):
+    list_display= ("order","product","batch")

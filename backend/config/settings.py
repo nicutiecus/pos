@@ -54,7 +54,8 @@ INSTALLED_APPS = [
     'sales',
     'finance',
     'reports',
-    'superadmin'
+    'superadmin',
+    'returns'
 ]
 
 MIDDLEWARE = [

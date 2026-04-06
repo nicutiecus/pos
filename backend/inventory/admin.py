@@ -8,4 +8,5 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(InventoryBatch)
 class InventoryBatchAdmin(admin.ModelAdmin):
+    list_display=("branch","product","batch_number")
     search_fields=("branch", "batch number")
