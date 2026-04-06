@@ -66,6 +66,9 @@ class InventoryBatch(TenantAwareModel):
 
     class Meta:
         db_table = 'inventory_batches'
+    
+    def __str__(self):
+        return self.batch_number
 
 class InventoryLog(TenantAwareModel):
     class TransactionType(models.TextChoices):
