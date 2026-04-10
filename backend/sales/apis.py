@@ -116,14 +116,15 @@ class PayDebtApi(views.APIView):
                 branch_id=serializer.validated_data['branch_id'],
                 amount=serializer.validated_data['amount'],
                 method=serializer.validated_data['method'],
-                notes=serializer.validated_data.get('notes', '')
+                notes=serializer.validated_data.get('notes', ''),
             )
             
             return Response({
                 "message": "Payment successful",
                 "new_balance": ledger.balance_after,
+                "amount": ledger.amount,
                 "transaction_id": ledger.id,
-                #"receipt_no": ledger.reference_id
+                "receipt_no": ledger.reference_id
             }, status=status.HTTP_200_OK)
 
         except ValidationError as e:

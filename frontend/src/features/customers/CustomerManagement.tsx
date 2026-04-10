@@ -21,6 +21,11 @@ interface LedgerEntry {
   reference: string;
 }
 
+interface Branch{
+    id: string | number,
+    name: string
+}
+
 const CustomerManagement: React.FC = () => {
   // --- Global State ---
   const userRole = localStorage.getItem('userRole');
@@ -53,7 +58,20 @@ const CustomerManagement: React.FC = () => {
   const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
   const [isLoadingLedger, setIsLoadingLedger] = useState(false);
 
+  // 3. Debt Repayment (NEW)
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentCustomer, setPaymentCustomer] = useState<Customer | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const branchId = localStorage.getItem('branchId');
+  const [paymentForm, setPaymentForm] = useState({
+      amount: '',
+      method: 'Cash',
+      notes: 'Debt repayment',
+      branch_id: branchId
+  });
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false)
+  
 
   
 
@@ -66,6 +84,28 @@ const CustomerManagement: React.FC = () => {
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, showDebtorsOnly, sortField, sortOrder, currentPage]);
+
+  useEffect(() => {
+    // Only fetch branches if the user is an Admin and has no assigned branchId
+    if (isAdmin && !branchId) {
+        const fetchBranches = async () => {
+            setIsLoadingBranches(true);
+            try {
+                // Replace '/api/branches/' with your actual endpoint route
+                const res = await api.get('/branches'); 
+                
+                // Adjust this if your API wraps the array (e.g., res.data.results)
+                setBranches(res.data); 
+            } catch (error) {
+                console.error("Failed to fetch branches:", error);
+            } finally {
+                setIsLoadingBranches(false);
+            }
+        };
+
+        fetchBranches();
+    }
+}, [isAdmin, branchId]);
 
   const fetchCustomers = async () => {
     setIsLoading(true);
@@ -165,6 +205,53 @@ const CustomerManagement: React.FC = () => {
       setIsLoadingLedger(false);
     }
   };
+    const handleOpenPayment = (customer: Customer) => {
+      setPaymentCustomer(customer);
+      // Auto-fill the amount with their total debt for convenience
+      setPaymentForm({
+          amount: customer.current_debt.toString(),
+          method: 'Cash',
+          notes: 'Debt repayment',
+          branch_id: branchId
+      });
+      setIsPaymentModalOpen(true);
+  };
+
+  const handleProcessPayment = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!paymentCustomer)
+        return
+      if (!paymentForm.branch_id) {
+        alert("Error: Branch ID is required to process this payment.");
+        return;
+    }
+
+      setIsProcessingPayment(true);
+      try {
+          const payload = {
+              branch_id: paymentForm.branch_id,
+              amount: Number(paymentForm.amount),
+              method: paymentForm.method,
+              notes: paymentForm.notes
+          };
+
+          // NOTE: Adjust this URL to match your exact Django endpoint path
+          const res = await api.post(`/sales/customers/${paymentCustomer.id}/pay-debt/`, payload);
+          
+          const data = res.data; // The JSON response you provided
+
+          alert(`✅ ${data.message}\n\nAmount Paid: ₦${Number(data.amount).toLocaleString()}\nNew Balance: ₦${Number(data.new_balance).toLocaleString()}\nReceipt #: ${data.receipt_no}`);
+          
+          setIsPaymentModalOpen(false);
+          await fetchCustomers(); // Refresh the list to show new debt balance
+          
+      } catch (err: any) {
+          alert(`Payment failed: ${err.response?.data?.message || err.message}`);
+      } finally {
+          setIsProcessingPayment(false);
+      }
+  };
+
 
 
   
@@ -260,14 +347,14 @@ const CustomerManagement: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-3">
                                         
-                                        {/*customer.current_debt > 0 && (
+                                        {customer.current_debt > 0 && (
                                             <button 
                                                 onClick={() => handleOpenPayment(customer)} 
                                                 className="text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded shadow-sm transition-colors"
                                             >
                                                 💳 Pay
                                             </button>
-                                        )*/}
+                                        )}
                                         <button onClick={() => handleViewLedger(customer)} className="text-blue-600 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded">
                                             📓 Ledger
                                         </button>
@@ -310,7 +397,99 @@ const CustomerManagement: React.FC = () => {
       
 
       </div>
+        {/* --- REPAYMENT MODAL (NEW) --- */}
+      {isPaymentModalOpen && paymentCustomer && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-down">
+                  <div className="bg-green-50 p-5 border-b border-green-100 flex justify-between items-start">
+                      <div>
+                          <h3 className="font-bold text-lg text-green-900">Process Repayment</h3>
+                          <p className="text-sm text-green-700">For {paymentCustomer.name}</p>
+                      </div>
+                      <button onClick={() => setIsPaymentModalOpen(false)} className="text-green-600 hover:text-red-500 text-xl leading-none">&times;</button>
+                  </div>
+                  
+                  <div className="p-5 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                      <span className="text-sm font-bold text-gray-500 uppercase">Total Owed:</span>
+                      <span className="text-xl font-extrabold text-red-600">₦{Number(paymentCustomer.current_debt).toLocaleString()}</span>
+                  </div>
 
+                  <form onSubmit={handleProcessPayment} className="p-5 space-y-4">
+                       {(!branchId && isAdmin) && (
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Branch <span className="text-red-500">*</span>
+                            </label>
+                            <select 
+                                required 
+                                value ={paymentForm.branch_id || ''} 
+                                onChange={e => setPaymentForm({...paymentForm, branch_id: e.target.value})}
+                                className="w-full border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none bg-blue-50" 
+                                disabled={isLoadingBranches}
+                            >
+                                <option value="" disabled>Select a branch</option>
+                                {branches.map(branch => (
+                                    <option key={branch.id} value={branch.id}>
+                                        {branch.name}
+                                    </option>
+                                ))}
+                            </select>
+                            
+                            {/* Loading state indicator */}
+                            {isLoadingBranches ? (
+                                <p className="text-xs text-blue-500 mt-1 animate-pulse">Loading branches...</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 mt-1">Required for Admins processing payments.</p>
+                            )}
+                        </div>
+                    )}
+                      <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Payment Amount (₦)</label>
+                          <input 
+                              type="number" 
+                              required 
+                              min="1"
+                              max={paymentCustomer.current_debt} // Prevent overpaying in this specific modal
+                              value={paymentForm.amount} 
+                              onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})}
+                              className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-lg font-bold text-gray-900" 
+                          />
+                      </div>
+                      
+                      <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Payment Method</label>
+                          <select 
+                              value={paymentForm.method} 
+                              onChange={e => setPaymentForm({...paymentForm, method: e.target.value})}
+                              className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                          >
+                              <option value="Cash">Cash</option>
+                              <option value="Transfer">Bank Transfer</option>
+                              <option value="POS">POS / Card</option>
+                          </select>
+                      </div>
+
+                      <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Notes (Optional)</label>
+                          <input 
+                              type="text" 
+                              value={paymentForm.notes} 
+                              onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})}
+                              className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm" 
+                              placeholder="e.g. Paid via GTBank transfer"
+                          />
+                      </div>
+                      
+                      <div className="pt-4 flex justify-end space-x-3">
+                          <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancel</button>
+                          <button type="submit" disabled={isProcessingPayment || !paymentForm.amount} className="px-5 py-2.5 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 transition-colors shadow-md">
+                              {isProcessingPayment ? 'Processing...' : 'Confirm Payment'}
+                          </button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
       
 
 
