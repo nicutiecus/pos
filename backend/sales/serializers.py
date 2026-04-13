@@ -138,7 +138,8 @@ class ShiftReportSerializer(serializers.ModelSerializer):
             'variance',
             'expected_pos', 
             'expected_transfer', 
-            'total_revenue'
+            'total_revenue',
+            'notes'
         ]
 
     def get_cashier_name(self, obj):

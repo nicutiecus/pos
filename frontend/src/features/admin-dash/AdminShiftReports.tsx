@@ -16,6 +16,7 @@ export interface AdminShiftReport {
   expected_cash: number;
   declared_cash: number;
   variance: number;
+  notes: string;
 }
 
 const AdminShiftReports: React.FC = () => {
@@ -242,9 +243,9 @@ const AdminShiftReports: React.FC = () => {
       {/* --- NEW: DYNAMIC SHIFT DETAILS MODAL --- */}
       {selectedShiftId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-fade-in-up">
             
-            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-lg font-black text-gray-800">Shift Details</h3>
                 {shiftDetails && (
@@ -261,7 +262,7 @@ const AdminShiftReports: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 min-h-[300px] flex flex-col justify-center">
+            <div className="p-6 flex-1 overflow-y-auto">
               {isModalLoading ? (
                  <div className="flex flex-col items-center justify-center text-gray-500 space-y-3">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
@@ -338,12 +339,25 @@ const AdminShiftReports: React.FC = () => {
                             {shiftDetails.variance > 0 ? '+' : ''}₦{Number(shiftDetails.variance).toLocaleString()}
                         </span>
                         </div>
+
+                        <div className="mt-6 pt-4 border-t border-gray-100">
+                          <h4 className="text-sm font-bold text-gray-800 mb-2">Cashier Notes</h4>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4 max-h-32 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap leading-relaxed shadow-inner">
+                            {shiftDetails.notes ? (
+                              shiftDetails.notes
+                            ) : (
+                              <span className="text-gray-400 italic">No notes provided for this shift.</span>
+                            )}
+                          </div>
+                        </div>
+
+                        
                     </div>
                  </div>
               ) : null}
             </div>
 
-            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 shrink-0">
               <button 
                 onClick={() => setSelectedShiftId(null)}
                 className="w-full bg-white border border-gray-300 text-gray-700 font-bold py-2.5 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
