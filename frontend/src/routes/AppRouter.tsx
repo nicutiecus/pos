@@ -33,6 +33,7 @@ import OrganizationInventory from '../features/inventory/OrganizationInventory';
 import StockRemoval from '../features/inventory/StockRemoval';
 import InventoryLogs from '../features/inventory/InventoryLogs';
 import InventoryBatches from '../features/inventory/InventoryBatches';
+import ReturnedGoodsList from '../features/inventory/ReturnedGoods';
 //new transfer form
 import StockTransfers from '../features/inventory/transfers/StockTransfers';
 // import POS
@@ -108,6 +109,7 @@ const AppRouter: React.FC = () => {
             <Route path="inventory-logs" element={<InventoryLogs/>} />
             <Route path="inventory/receive" element={<InventoryReceiving/>}/>
             <Route path="inventory/remove" element={<StockRemoval/>}/>
+            <Route path="returned-goods" element ={<ReturnedGoodsList/>}/>
             <Route path="branches" element={<BranchManagement />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="products" element={<ProductList />} />

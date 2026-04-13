@@ -61,6 +61,9 @@ const AdminLayout: React.FC = () => {
                 <Link to="/admin/inventory-logs" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                   Audit Logs
                 </Link>
+                <Link to="/admin/returned-goods" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                  Returned Goods
+                </Link>
               </div>
             )}
           </div>
@@ -99,6 +102,8 @@ const AdminLayout: React.FC = () => {
                 <Link to="/admin/eodreport" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                   End of Day Reports
                 </Link>
+              
+                
                 {/* <Link to="" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                   Profit reports
                 </Link> */}

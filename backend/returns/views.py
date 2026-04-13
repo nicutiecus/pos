@@ -4,7 +4,7 @@ from rest_framework import status
 from .selectors import get_branch_returns, get_return_order_details
 from .serializers import ReturnOrderListOutputSerializer, ReturnOrderDetailOutputSerializer
 from .services import process_customer_return
-from .models import SalesOrder
+from sales.models import SalesOrder
 from common.pagination import StandardResultsSetPagination
 
 class ReturnOrderListCreateAPIView(APIView):

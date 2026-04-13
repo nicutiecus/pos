@@ -1,7 +1,8 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
-from .models import ReturnOrder, ReturnItem, SaleItem
+from .models import ReturnOrder, ReturnItem
+from sales.models import SaleItem
 from inventory.models import InventoryBatch
 from decimal import Decimal
 

@@ -19,7 +19,7 @@ class ReturnOrder(TenantAwareModel):
         null=True, 
         related_name='processed_returns'
     )
-    
+    branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT)
     total_refund_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     reason = models.TextField(blank=True, null=True, help_text="Optional reason for the return.")
 
