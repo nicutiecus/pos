@@ -21,12 +21,13 @@ const POSMain: React.FC = () => {
                 
                 {/* The New Action Button */}
               <div className='flex flex-col space-y-2' >
-                <button 
+                {/*<button 
                 onClick={() => setIsReturnModalOpen(true)}
                 className="bg-orange-500 hover:bg-orange-400 px-4 py-2 rounded font-bold shadow-sm transition-colors"
                 >
                 ↩️ Process Return
                 </button>
+                */}
                 <button 
                     onClick={() => setIsDebtModalOpen(true)}
                     className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded font-bold shadow-sm"
