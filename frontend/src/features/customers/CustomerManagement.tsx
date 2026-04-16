@@ -30,7 +30,7 @@ const CustomerManagement: React.FC = () => {
   // --- Global State ---
   const userRole = localStorage.getItem('userRole');
   //const branchId = localStorage.getItem('branchId');
-  const isAdmin = userRole === 'Tenant_Admin' || userRole === 'ADMIN';
+  const isAdmin = userRole === 'Tenant_Admin' || userRole === 'ADMIN' || userRole=== 'Super_Admin';
 
   // --- Data State ---
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -510,6 +510,7 @@ const CustomerManagement: React.FC = () => {
                       <div>
                           <label className="block text-sm font-bold text-gray-700 mb-1">Phone Number</label>
                           <input type="tel" required value={editingCustomer.phone} onChange={e => setEditingCustomer({...editingCustomer, phone: e.target.value})}
+                              disabled={!isAdmin}
                               className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
                       </div>
                       <div>

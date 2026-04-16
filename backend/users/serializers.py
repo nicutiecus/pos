@@ -13,7 +13,9 @@ VALID_PERMISSIONS = [
     'issue_refunds',
     'edit_product_prices',
     'create_products',
-    'transfer_stock'
+    'transfer_stock',
+    'receive_stock',
+    'remove_stock'
 ]
 
 
