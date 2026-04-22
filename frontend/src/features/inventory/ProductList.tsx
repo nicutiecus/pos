@@ -142,7 +142,7 @@ const ProductList: React.FC = () => {
   const userRole = localStorage.getItem('userRole');
   const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '[]');
   const canCreateProducts = userRole === 'Tenant_Admin' || userRole === 'Super_Admin' || userPermissions.includes('create_products');
-
+  
 
   // Form State
   const [newProduct, setNewProduct] = useState<NewProductPayload>({

@@ -15,9 +15,12 @@ class ReturnOrderListCreateAPIView(APIView):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
 
+        query_branch_id = request.query_params.get('branch_id') or request.user.branch_id
+        query_tenant = request.query_params.get('tenant') or request.user.tenant
+
         returns_qs = get_branch_returns(
-            tenant=request.user.tenant,
-            branch_id=request.user.branch_id,
+            tenant=query_tenant,
+            branch_id=query_branch_id,
             start_date=start_date,
             end_date=end_date
         )
@@ -35,19 +38,27 @@ class ReturnOrderListCreateAPIView(APIView):
         original_order_id = request.data.get('original_order_id')
         return_data = request.data.get('items', [])
         reason = request.data.get('reason', '')
+        branch_id = request.data.get('branch_id')
+
+        """# --- Debugging Log ---
+        print(f"DEBUG: Looking for Order ID: {original_order_id}")
+        print(f"DEBUG: Request User Tenant: {request.user.tenant}")
+        print(f"DEBUG: Request User Branch: {branch_id}")
+        """
+    # -------------
 
         try:
             # 1. Fetch the parent order securely
             original_order = SalesOrder.objects.get(
                 id=original_order_id, 
                 tenant=request.user.tenant, 
-                branch_id=request.user.branch_id
+                branch_id=branch_id
             )
             
             # 2. Hand off to the service layer (from our previous step)
             return_order = process_customer_return(
                 tenant=request.user.tenant,
-                branch_id=request.user.branch_id,
+                branch_id=branch_id,
                 original_order=original_order,
                 cashier=request.user,
                 return_data=return_data,

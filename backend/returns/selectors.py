@@ -6,9 +6,11 @@ def get_branch_returns(*, tenant, branch_id: str, start_date=None, end_date=None
     """
     Retrieves a list of all return orders for a specific branch.
     Optimized for list views (tables/datagrids).
+
     """
+    
     qs = ReturnOrder.objects.filter(
-        tenant=tenant, 
+        tenant_id=tenant if isinstance(tenant, str) else getattr(tenant, 'id', tenant), 
         branch_id=branch_id
     ).select_related('cashier', 'original_order')
 

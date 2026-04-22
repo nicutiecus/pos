@@ -9,12 +9,13 @@ export interface ReturnedGoodsPayload {
   condition: ReturnCondition;
   refundAmount: number;
   notes: string;
+  branch_id: string;
 }
 
 export interface ReturnedGoodsRecord extends ReturnedGoodsPayload {
   id: string;
-  itemName: string;
-  dateReturned: string;
-  cashierName: string;
-  refundAmount: number;
+  cashier_name: string;
+  total_refund_amount: number;
+  created_at: string;
+  reason: string
 }

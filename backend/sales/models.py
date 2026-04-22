@@ -79,6 +79,10 @@ class SalesOrder(TenantAwareModel):
         PAID = 'Paid', _('Paid')
         PARTIAL = 'Partial', _('Partial')
         PENDING = 'Pending', _('Pending')
+    
+    class OrderStatus(models.TextChoices):
+        COMPLETED= 'Completed', _('Completed')
+        VOIDED = 'Voided', _('Voided')
 
     id = models.CharField(primary_key=True, max_length=8, 
         default=generate_receipt_id, editable=False)
@@ -90,7 +94,7 @@ class SalesOrder(TenantAwareModel):
     amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING)
     customer_snapshot = models.JSONField(default=dict, blank=True, help_text=_("Snapshot of customer details at time of sale"))
-
+    status = models.CharField(max_length=20, choices=OrderStatus.choices, default=OrderStatus.COMPLETED)
     class Meta:
         db_table = 'sales_orders'
 
@@ -170,3 +174,26 @@ class ShiftReport(TenantAwareModel):
     def __str__(self):
         return f"Shift {self.id} - {self.cashier.email} ({self.status})"
     
+class VoidRequest(TenantAwareModel):
+    """Tracks a cashier's request to void an order for remote manager approval."""
+    
+    class StatusChoices(models.TextChoices):
+        PENDING = 'Pending', 'Pending'
+        APPROVED = 'Approved', 'Approved'
+        REJECTED = 'Rejected', 'Rejected'
+
+    # We use OneToOneField because an order can only have one active void request
+    order = models.OneToOneField('SalesOrder', on_delete=models.CASCADE, related_name='void_request')
+    
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='voids_requested')
+    reason = models.TextField()
+    
+    status = models.CharField(max_length=20, choices=StatusChoices.choices, default=StatusChoices.PENDING, db_index=True)
+    
+    # The Resolution Trail
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='voids_reviewed')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Void Request for {self.order.receipt_number} ({self.status})"

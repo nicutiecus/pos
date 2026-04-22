@@ -8,7 +8,8 @@ from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer,
                           CreateSaleSerializer, PayDebtSerializer, CustomerLedgerSerializer,
                           CloseShiftSerializer, ShiftReportSerializer)
 
-from .services import create_sale_service, pay_customer_debt_service, close_shift_service
+from .services import (create_sale_service, pay_customer_debt_service, close_shift_service, 
+                       create_void_request, resolve_void_request)
 from .pagination import StandardResultsSetPagination
 from rest_framework.views import APIView
 from .models import SalesOrder, ShiftReport, Payment, CustomerLedger
@@ -19,6 +20,7 @@ from rest_framework import status as drf_status
 from django.db.models import Sum, Q
 from django.db.models.functions import Coalesce
 from decimal import Decimal
+
 
 
 
@@ -389,3 +391,47 @@ class ShiftReportDetailApi(APIView):
         serializer = ShiftReportSerializer(shift)
         
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+class CashierVoidRequestAPIView(APIView):
+    """POST /api/orders/<id>/void-request/"""
+    def post(self, request, order_id):
+        reason = request.data.get('reason')
+        try:
+            void_req = create_void_request(
+                tenant=request.user.tenant,
+                branch_id=request.user.branch_id,
+                order_id=order_id,
+                cashier=request.user,
+                reason=reason
+            )
+            return Response({"message": "Void request sent to manager.", "request_id": void_req.id})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+
+class ManagerVoidApprovalAPIView(APIView):
+    """
+    GET /api/void-requests/ (List pending requests)
+    POST /api/void-requests/<id>/resolve/ (Approve or Reject)
+    """
+    def get(self, request):
+        # Return a list of VoidRequests where status='Pending'
+        pass 
+
+    def post(self, request, request_id):
+        action = request.data.get('action') # 'Approve' or 'Reject'
+        rejection_reason = request.data.get('rejection_reason', '')
+        
+        try:
+            void_req = resolve_void_request(
+                tenant=request.user.tenant,
+                request_id=request_id,
+                manager=request.user,
+                action=action,
+                rejection_reason=rejection_reason
+            )
+            return Response({"message": f"Request {void_req.status} successfully."})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)

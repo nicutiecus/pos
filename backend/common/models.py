@@ -63,6 +63,9 @@ class TenantSettings(TenantAwareModel):
     
     # Receipt Customization
     receipt_footer = models.TextField(default="Thank you for your patronage!", blank=True)
+
+    void_approval_roles = models.JSONField(default=list, 
+     help_text="List of roles allowed to approve voids, e.g., ['Admin', 'Branch_Manager']")
     
     # Logo (Optional - requires Pillow library)
     # logo = models.ImageField(upload_to='logos/', blank=True, null=True)

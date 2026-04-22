@@ -10,12 +10,12 @@ class ReturnItemOutputSerializer(serializers.ModelSerializer):
         fields = ['id', 'product_name', 'quantity_returned', 'refund_amount', 'condition', 'cost_price']
 
 class ReturnOrderListOutputSerializer(serializers.ModelSerializer):
-    cashier_name = serializers.CharField(source='cashier.get_full_name', read_only=True)
-    original_receipt_number = serializers.CharField(source='original_order.receipt_number', read_only=True) # Adjust to your actual SalesOrder field
+    cashier_name = serializers.CharField(source='cashier.email', read_only=True)
+    original_order= serializers.CharField(source='original_order.receipt_number', read_only=True) # Adjust to your actual SalesOrder field
 
     class Meta:
         model = ReturnOrder
-        fields = ['id', 'original_receipt_number', 'cashier_name', 'total_refund_amount', 'created_at', 'reason']
+        fields = ['id', 'original_order', 'cashier_name', 'total_refund_amount', 'created_at', 'reason']
 
 class ReturnOrderDetailOutputSerializer(ReturnOrderListOutputSerializer):
     items = ReturnItemOutputSerializer(many=True, read_only=True)

@@ -68,7 +68,37 @@ const AdminLayout: React.FC = () => {
             )}
           </div>
           {/* --- END DROPDOWN --- */}
-          <Link to="/admin/sales-orders" className="p-2 hover:bg-gray-800 rounded transition-colors">Sales Orders</Link>
+           {/* --- SALES DROPDOWN --- */}
+          <div className="flex flex-col">
+            <button 
+              onClick={() => setIsReportsOpen(!isReportsOpen)}
+              className="w-full p-2 hover:bg-gray-800 rounded flex justify-between items-center transition-colors outline-none"
+            >
+              <span className="font-medium">Sales</span>
+              <svg 
+                className={`w-4 h-4 transform transition-transform duration-200 ${isReportsOpen ? 'rotate-180' : ''}`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {/* Expanded Links */}
+            {isReportsOpen && (
+              <div className="flex flex-col mt-1 ml-4 pl-2 border-l-2 border-gray-700 space-y-1 animate-fade-in">
+                <Link to="/admin/sales-orders" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+               Sales Orders
+                </Link>
+                <Link to="/admin/eodreport" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                  Void Sales
+                </Link>
+                
+              </div>
+            )}
+          </div>
+          {/* --- END DROPDOWN --- */}
           <Link to="/admin/branches" className="p-2 hover:bg-gray-800 rounded transition-colors">Branches</Link>
           <Link to="/admin/customers" className="p-2 hover:bg-gray-800 rounded transition-colors">Customers</Link>
           <Link to="/admin/expenses" className="p-2 hover:bg-gray-800 rounded transition-colors">Expenses</Link>

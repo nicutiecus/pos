@@ -9,6 +9,8 @@ import random
 import string
 from .models import ShiftReport
 from .selectors import get_current_shift_data
+from .models import VoidRequest
+
 
 
 
@@ -342,3 +344,147 @@ def close_shift_service(*, user, shift_id, declared_cash, expected_cash, varianc
     shift.save()
 
     return shift
+
+@transaction.atomic
+def process_void_transaction(*, tenant, branch_id, order_id: str, requested_by, authorized_by, reason: str):
+    """
+    Safely nullifies a same-shift transaction, reversing payments and restocking inventory.
+    """
+    # 1. Fetch and lock the order
+    try:
+        order = SalesOrder.objects.select_for_update().get(
+            id=order_id,
+            tenant=tenant,
+            branch_id=branch_id
+        )
+    except SalesOrder.DoesNotExist:
+        raise ValidationError("Sales order not found.")
+
+    # 2. State Validations
+    if order.status == 'Voided':
+        raise ValidationError("This order has already been voided.")
+    
+    if hasattr(order, 'returns') and order.returns.exists():
+        raise ValidationError("Cannot void an order that has processed returns. Use the refund system.")
+
+    # 3. Shift Validation (The most critical security check)
+    # Ensure the cashier who made the sale still has an open shift.
+    shift_is_open = ShiftReport.objects.filter(
+        tenant=tenant,
+        branch_id=branch_id,
+        cashier=order.user, # Assuming 'user' or 'cashier' is on the SalesOrder
+        status=ShiftReport.Status.OPEN # Adjust to your actual status choice
+    ).exists()
+
+    if not shift_is_open:
+        raise ValidationError(
+            "Security Violation: Cannot void this transaction because the cashier's shift has been closed. "
+            "Please process this as a standard Return instead."
+        )
+
+    # 4. Mutate the Order State
+    order.status = 'Voided'
+    # Optional: Log who voided it and why on the order model if you have these fields
+    # order.voided_by = authorized_by 
+    # order.void_reason = reason
+    # order.voided_at = timezone.now()
+    order.save()
+
+    # 5. Nullify associated payments
+    # Assuming your Payment model has a status field. 
+    # If not, you might delete the payment records, though mutating status is preferred.
+
+    # 6. Inventory Restocking (FIFO Safe)
+    # Just like returns, we create a fresh batch at the exact cost price locked during the sale.
+    # Because it happened on the same day, this perfectly preserves asset value.
+    for item in order.items.all():
+        InventoryBatch.objects.create(
+            tenant=tenant,
+            branch_id=branch_id,
+            product=item.product,
+            quantity_received=item.quantity,
+            quantity_remaining=item.quantity,
+            cost_price=item.cost_price_at_sale, # Crucial: Restores exact ledger value
+            notes=f"Restocked from Voided Order #{order.receipt_number}. Auth by: {authorized_by.get_full_name()}"
+        )
+
+    return order
+
+
+
+def create_void_request(*, tenant, branch_id, order_id: str, cashier, reason: str):
+    """Cashier initiates the request."""
+    order = SalesOrder.objects.get(id=order_id, tenant=tenant, branch_id=branch_id)
+    
+    if order.status == 'Voided':
+        raise ValidationError("Order is already voided.")
+        
+    if hasattr(order, 'void_request') and order.void_request.status == 'Pending':
+        raise ValidationError("A void request is already pending for this order.")
+
+    return VoidRequest.objects.create(
+        tenant=tenant,
+        branch_id=branch_id,
+        order=order,
+        requested_by=cashier,
+        reason=reason
+    )
+
+
+@transaction.atomic
+def resolve_void_request(*, tenant, request_id: int, user, action: str, rejection_reason: str = ""):
+    """Manager approves or rejects the request."""
+    
+    # 1. Security Authorization check based on Tenant Settings
+    allowed_roles = tenant.void_approval_roles
+    if user.role not in allowed_roles:
+        raise ValidationError("You do not have permission to approve void requests.")
+
+    # 2. Lock the request to prevent double-processing
+    void_req = VoidRequest.objects.select_for_update().get(id=request_id, tenant=tenant)
+    
+    if void_req.status != 'Pending':
+        raise ValidationError(f"This request has already been {void_req.status}.")
+
+    # 3. Handle Rejection
+    if action == 'Reject':
+        void_req.status = 'Rejected'
+        void_req.reviewed_by = user
+        void_req.reviewed_at = timezone.now()
+        void_req.rejection_reason = rejection_reason
+        void_req.save()
+        return void_req
+
+    # 4. Handle Approval (Execute the core void logic)
+    if action == 'Approve':
+        order = void_req.order
+        
+        # [Insert the Shift Validation check here if you still want to ensure 
+        # the cashier's shift hasn't closed while the manager was reviewing]
+
+        # Mutate Order
+        order.status = 'Voided'
+        order.save()
+
+        # Mutate Payments
+        Payment.objects.filter(reference_code=order.receipt_number).update(status='Voided')
+
+        # Restock Inventory (FIFO Safe)
+        for item in order.items.all():
+            InventoryBatch.objects.create(
+                tenant=tenant,
+                branch_id=void_req.branch_id,
+                product=item.product,
+                quantity_received=item.quantity,
+                quantity_remaining=item.quantity,
+                cost_price=item.cost_price_at_sale,
+                notes=f"Restocked from Voided Order #{order.receipt_number}. Auth by: {user.get_full_name()}"
+            )
+
+        # Update Request Trail
+        void_req.status = 'Approved'
+        void_req.reviewed_by = user
+        void_req.reviewed_at = timezone.now()
+        void_req.save()
+
+        return void_req
