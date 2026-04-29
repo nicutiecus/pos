@@ -41,3 +41,4 @@ def record_expense_service(*, user, category: str, amount: float, description: s
     expense.save()
     
     return expense
+

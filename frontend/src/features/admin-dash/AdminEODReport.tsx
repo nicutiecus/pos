@@ -5,6 +5,7 @@ import api from '../../api/axiosInstance';
 interface PaymentMethodTotal {
   method: string;
   total_amount: number;
+  transaction_type: string;
 }
 
 interface ItemSold {
@@ -100,6 +101,41 @@ const AdminEODReport: React.FC = () => {
     fetchReport();
   }, [selectedBranchId, selectedDate]);
 
+  // --- MATRIX TRANSFORMATION LOGIC ---
+  const paymentMethods = ['POS', 'Transfer', 'Cash'] as const;
+  const transactionTypes = ['Sales', 'Debt Payment'] as const;
+
+  // Initialize an empty matrix
+  const matrixData = {
+    'POS': { 'Sales': 0, 'Debt Payment': 0 },
+    'Transfer': { 'Sales': 0, 'Debt Payment': 0 },
+    'Cash': { 'Sales': 0, 'Debt Payment': 0 },
+  };
+
+  // Populate the matrix with data from the API
+  if (reportData?.payment_methods_breakdown) {
+    reportData.payment_methods_breakdown.forEach((pm) => {
+      // Ensure the method and type match our predefined keys before adding to prevent errors
+      if (
+        (pm.method === 'POS' || pm.method === 'Transfer' || pm.method === 'Cash') &&
+        (pm.transaction_type === 'Sales' || pm.transaction_type === 'Debt Payment')
+      ) {
+        matrixData[pm.method][pm.transaction_type] += Number(pm.total_amount);
+      }
+    });
+  }
+
+  // Calculation Helpers
+  const calculateColumnTotal = (type: typeof transactionTypes[number]) => {
+    return paymentMethods.reduce((sum, method) => sum + matrixData[method][type], 0);
+  };
+
+  const calculateRowTotal = (method: typeof paymentMethods[number]) => {
+    return transactionTypes.reduce((sum, type) => sum + matrixData[method][type], 0);
+  };
+
+  const grandTotal = paymentMethods.reduce((sum, method) => sum + calculateRowTotal(method), 0);
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4">
       
@@ -175,24 +211,65 @@ const AdminEODReport: React.FC = () => {
                 {/* LEFT COLUMN */}
                 <div className="lg:col-span-1 space-y-6">
                     {/* Payment Breakdown */}
+                    {/* Payment Breakdown Matrix */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="bg-gray-50 p-4 border-b border-gray-200">
+                        <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
                             <h3 className="font-bold text-gray-800">Payment Breakdown</h3>
                         </div>
-                        <div className="p-4 space-y-3">
-                            {(reportData.payment_methods_breakdown || []).length > 0 ? (
-                                (reportData.payment_methods_breakdown || []).map((pm, idx) => (
-                                    <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100">
-                                        <span className="font-bold text-gray-700">{pm.method}</span>
-                                        <span className="font-black text-gray-900">₦{Number(pm.total_amount).toLocaleString()}</span>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-gray-500 italic text-center py-4">No payments recorded.</p>
-                            )}
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 text-left">
+                                <thead className="bg-gray-800 text-white">
+                                    <tr>
+                                        <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] border-r border-gray-700">
+                                            Method
+                                        </th>
+                                        {transactionTypes.map(type => (
+                                            <th key={type} className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] text-right">
+                                                {type}
+                                            </th>
+                                        ))}
+                                        <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] text-right border-l border-gray-700 bg-gray-900">
+                                            Total
+                                        </th>
+                                    </tr>
+                                </thead>
+                                
+                                <tbody className="divide-y divide-gray-200 bg-white">
+                                    {paymentMethods.map(method => (
+                                        <tr key={method} className="hover:bg-gray-50 transition-colors">
+                                            <th className="px-3 py-3 font-bold text-gray-800 bg-gray-50 border-r border-gray-200 text-xs">
+                                                {method}
+                                            </th>
+                                            {transactionTypes.map(type => (
+                                                <td key={`${method}-${type}`} className="px-3 py-3 text-gray-700 font-medium text-right text-xs">
+                                                    ₦{matrixData[method][type].toLocaleString()}
+                                                </td>
+                                            ))}
+                                            <td className="px-3 py-3 text-gray-900 font-bold text-right border-l border-gray-200 bg-gray-50 text-xs">
+                                                ₦{calculateRowTotal(method).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                
+                                <tfoot className="bg-blue-50 border-t-2 border-blue-200">
+                                    <tr>
+                                        <th className="px-3 py-3 font-black text-blue-900 border-r border-blue-200 uppercase tracking-wider text-[10px]">
+                                            Grand
+                                        </th>
+                                        {transactionTypes.map(type => (
+                                            <td key={`total-${type}`} className="px-3 py-3 font-black text-blue-900 text-right text-xs">
+                                                ₦{calculateColumnTotal(type).toLocaleString()}
+                                            </td>
+                                        ))}
+                                        <td className="px-3 py-3 font-black text-blue-900 text-right border-l border-blue-200 text-sm">
+                                            ₦{grandTotal.toLocaleString()}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
                     </div>
-
                     {/* Price Changes Tracker */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">

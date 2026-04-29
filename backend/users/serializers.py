@@ -14,8 +14,6 @@ VALID_PERMISSIONS = [
     'edit_product_prices',
     'create_products',
     'transfer_stock',
-    'receive_stock',
-    'remove_stock'
 ]
 
 

@@ -194,8 +194,7 @@ def accept_transfer_service(*, user, transfer_id):
 
         return transfer
 
-# inventory/services.py
-# ... ensure you have your existing imports ...
+
 
 def reject_transfer_service(*, user, transfer_id: str, reason: str = ""):
     with transaction.atomic():

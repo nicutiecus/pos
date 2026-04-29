@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api/axiosInstance';
 import { useReactToPrint } from 'react-to-print';
+import { Link } from 'react-router-dom';
 
 // --- Interfaces ---
 interface ShiftSummary {
@@ -150,6 +151,11 @@ const ShiftClosing: React.FC<Props> = ({ onCancel, onLogout }) => {
                     <button onClick={onLogout} className="bg-green-600 text-white px-8 py-2 rounded-lg font-bold shadow hover:bg-green-700 transition-colors">
                         Complete & Log Out
                     </button>
+                    {/*isAdmin &&(
+                    <Link to='/admin'>
+                    Dashboard
+                    </Link>)
+                    */}
                 </div>
           </div>
       ) : (

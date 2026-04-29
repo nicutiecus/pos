@@ -251,7 +251,7 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
         branch_id=branch_id,
         created_at__date=report_date
     )
-    payment_breakdown = list(payments_qs.values('method').annotate(
+    payment_breakdown = list(payments_qs.values('method','transaction_type').annotate(
         total_amount=Sum('amount')
     ))
 
