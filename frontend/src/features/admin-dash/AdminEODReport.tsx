@@ -101,6 +101,7 @@ const AdminEODReport: React.FC = () => {
     fetchReport();
   }, [selectedBranchId, selectedDate]);
 
+  {/*
   // --- MATRIX TRANSFORMATION LOGIC ---
   const paymentMethods = ['POS', 'Transfer', 'Cash'] as const;
   const transactionTypes = ['Sales', 'Debt Payment'] as const;
@@ -126,6 +127,7 @@ const AdminEODReport: React.FC = () => {
   }
 
   // Calculation Helpers
+  
   const calculateColumnTotal = (type: typeof transactionTypes[number]) => {
     return paymentMethods.reduce((sum, method) => sum + matrixData[method][type], 0);
   };
@@ -135,6 +137,7 @@ const AdminEODReport: React.FC = () => {
   };
 
   const grandTotal = paymentMethods.reduce((sum, method) => sum + calculateRowTotal(method), 0);
+  */}
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4">
@@ -212,6 +215,7 @@ const AdminEODReport: React.FC = () => {
                 <div className="lg:col-span-1 space-y-6">
                     {/* Payment Breakdown */}
                     {/* Payment Breakdown Matrix */}
+                    {/*
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
                             <h3 className="font-bold text-gray-800">Payment Breakdown</h3>
@@ -270,6 +274,7 @@ const AdminEODReport: React.FC = () => {
                             </table>
                         </div>
                     </div>
+                    */}
                     {/* Price Changes Tracker */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
