@@ -47,7 +47,7 @@ const AdminEODReport: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   
-  // Default to today's date
+  // Default to today's date.
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
   const [reportData, setReportData] = useState<EODReportData | null>(null);
