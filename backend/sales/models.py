@@ -89,7 +89,7 @@ class SalesOrder(TenantAwareModel):
     branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    shift = models.ForeignKey('ShiftReport', on_delete=models.PROTECT, null=True, blank=True, related_name='sales')
+    shift = models.ForeignKey('ShiftReport', on_delete=models.PROTECT, related_name='sales')
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
