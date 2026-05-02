@@ -39,6 +39,7 @@ class ReturnOrderListCreateAPIView(APIView):
         return_data = request.data.get('items', [])
         reason = request.data.get('reason', '')
         branch_id = request.data.get('branch_id')
+        refund_method = request.data.get('refund_method', 'Cash')
 
         """# --- Debugging Log ---
         print(f"DEBUG: Looking for Order ID: {original_order_id}")
@@ -62,7 +63,8 @@ class ReturnOrderListCreateAPIView(APIView):
                 original_order=original_order,
                 cashier=request.user,
                 return_data=return_data,
-                reason=reason
+                reason=reason,
+                refund_method=refund_method
             )
             
             return Response(

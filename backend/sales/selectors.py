@@ -119,6 +119,8 @@ def get_current_shift_data(*, user):
         # Breakdown values for the UI
         new_sales_cash=Coalesce(Sum('amount', filter=Q(method='Cash', transaction_type='Sales')), Decimal('0.00')),
         debt_recovery_cash=Coalesce(Sum('amount', filter=Q(method='Cash', transaction_type='Debt Payment')), Decimal('0.00')),
+        total_refunds_issued=Coalesce(Sum('amount', filter=Q(transaction_type='Refund')), Decimal('0.00')),
+        
     )
    
     # 6. Return the EXACT JSON dictionary your frontend expects
@@ -131,6 +133,7 @@ def get_current_shift_data(*, user):
         "expected_pos": payments['expected_pos'] or Decimal('0.00'),
         "expected_transfer": payments['expected_transfer'] or Decimal('0.00'),
         "total_revenue": payments['total_revenue'] or Decimal('0.00'),
+        "refunds_issued": payments['total_refunds_issued'] or Decimal('0.00'),
         
         # We can still pass the breakdown safely just in case the UI wants to show it
         "breakdown": {
@@ -194,3 +197,35 @@ def get_shift_report_detail(*, user, shift_id):
     
     # Fetch by the database ID (or change to shift_code if your frontend uses that in the URL)
     return get_object_or_404(query, id=shift_id)
+
+
+def get_open_shift_reports(*, user, branch_id=None, status='Open', search_term=None):
+    """
+    Fetches shift reports based on status.
+    Cashiers only see their own shifts. Admins see all or filter by branch.
+    """
+    # Base query
+    query = ShiftReport.objects.filter(
+        tenant=user.tenant,
+        status=status
+    ).select_related('cashier', 'branch').order_by('-start_time')
+
+    # Security: Isolate data based on role
+    admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+    
+    if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
+        # Standard staff/cashiers only see their own shift history
+        query = query.filter(cashier=user)
+    elif branch_id:
+        # Admins can filter down to a specific branch's shifts
+        query = query.filter(branch_id=branch_id)
+    
+    if search_term:
+        query = query.filter(
+            Q(shift_code__icontains=search_term) |
+            Q(cashier__first_name__icontains=search_term) |
+            Q(cashier__last_name__icontains=search_term) |
+            Q(cashier__email__icontains=search_term)
+        )
+
+    return query

@@ -3,7 +3,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
 from .selectors import (get_sales_list, get_sale_detail, get_customer_ledger, 
-                        get_current_shift_data, get_shift_reports, get_shift_report_detail)
+                        get_current_shift_data, get_shift_reports, get_shift_report_detail,
+                        get_open_shift_reports)
 from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer, 
                           CreateSaleSerializer, PayDebtSerializer, CustomerLedgerSerializer,
                           CloseShiftSerializer, ShiftReportSerializer)
@@ -379,6 +380,35 @@ class ClosedShiftListApi(APIView):
         return paginator.get_paginated_response(serializer.data)
     
 
+
+class OpenShiftListApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Allow admins to optionally filter by branch using ?branch_id=uuid
+        branch_id = request.query_params.get('branch_id')
+
+        search_term = request.query_params.get('search', '').strip()
+        
+        # Fetch shifts with 'Closed' status
+        shifts = get_open_shift_reports(
+            user=request.user, 
+            branch_id=branch_id, 
+            status='Open',
+             search_term=search_term
+        )
+        # 2. Initialize the paginator
+        paginator = StandardResultsSetPagination()
+        
+        # 3. Slice the data based on the ?page= parameter in the URL
+        paginated_shifts = paginator.paginate_queryset(shifts, request)
+        
+        # 4. Serialize ONLY the 10 items for this specific page
+        serializer = ShiftReportSerializer(paginated_shifts, many=True)
+        
+        # 5. Return the special paginated response format
+        return paginator.get_paginated_response(serializer.data)
+    
 
 class ShiftReportDetailApi(APIView):
     permission_classes = [IsAuthenticated]

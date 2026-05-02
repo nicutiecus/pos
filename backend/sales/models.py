@@ -89,6 +89,7 @@ class SalesOrder(TenantAwareModel):
     branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    shift = models.ForeignKey('ShiftReport', on_delete=models.PROTECT, null=True, blank=True, related_name='sales')
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
@@ -100,7 +101,6 @@ class SalesOrder(TenantAwareModel):
 
 class SaleItem(models.Model):
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='items')
-    # Cross-app FK to inventory
     product = models.ForeignKey('inventory.Product', on_delete=models.PROTECT)
     batch = models.ForeignKey('inventory.InventoryBatch', on_delete=models.PROTECT)
     cost_price_at_sale = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -116,6 +116,7 @@ class Payment(TenantAwareModel):
     class Transactiontype(models.TextChoices):
         SALES='Sales', _('Sales')
         DEBT_PAYMENT='Debt Payment', _('Debt Payment')
+        REFUND = 'Refund', _('Refund')
 
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, related_name='payments', null=True, blank=True)

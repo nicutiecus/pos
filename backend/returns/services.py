@@ -2,12 +2,13 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from .models import ReturnOrder, ReturnItem
-from sales.models import SaleItem
+from sales.models import SaleItem, Payment, CustomerLedger, Customer
 from inventory.models import InventoryBatch
 from decimal import Decimal
 
 @transaction.atomic
-def process_customer_return(*, tenant, branch_id, original_order, cashier, return_data: list, reason: str = ""):
+def process_customer_return(*, tenant, branch_id, original_order,
+                            cashier, return_data: list, reason: str = "", refund_method: str='Cash'):
     """
     Processes a return transaction.
     return_data format:
@@ -83,6 +84,69 @@ def process_customer_return(*, tenant, branch_id, original_order, cashier, retur
                 expiry_date= orig_expiry
             )
 
+    # FINANCIAL REVERSAL & DEBT RECONCILIATION
+    total_refund_amount=item_data['refund_amount']
+    refund_remaining = total_refund_amount
+
+    # 1. If there is a refund to process, and the original order belonged to a tracked customer
+    if refund_remaining > 0 and original_order.customer:
+        
+        # Find out if THIS specific order generated debt
+        ledger_entry = CustomerLedger.objects.filter(
+            reference_id=original_order.id, 
+            transaction_type=CustomerLedger.TransactionType.SALE
+        ).first()
+        
+        original_order_debt = ledger_entry.amount if ledger_entry else Decimal('0.00')
+
+        if original_order_debt > 0:
+            # Lock the customer row to prevent race conditions during financial updates
+            customer = Customer.objects.select_for_update().get(id=original_order.customer.id)
+            
+            # CRITICAL CALCULATION: 
+            # We can only forgive up to the refund amount, up to the debt incurred on THIS order,
+            # AND we cannot forgive more than their current overall debt balance.
+            debt_to_forgive = min(refund_remaining, original_order_debt, customer.current_debt)
+            
+            if debt_to_forgive > 0:
+                # Deduct the debt
+                customer.current_debt -= debt_to_forgive
+                customer.save()
+                
+                # Create the Ledger Entry to maintain the audit trail
+                CustomerLedger.objects.create(
+                    tenant=tenant,
+                    branch_id=branch_id,
+                    customer=customer,
+                    transaction_type=CustomerLedger.TransactionType.PAYMENT, # Acts as a payment against their debt
+                    amount=debt_to_forgive,
+                    balance_after=customer.current_debt,
+                    reference_id=return_order.id, # Link it to the Return transaction!
+                    notes=f"Debt reversal for returned items (Orig. Order #{original_order.id})",
+                    processed_by=cashier
+                )
+                
+                # Deduct the forgiven debt from the remaining refund pool
+                refund_remaining -= debt_to_forgive
+
+    # 2. Handle leftover Cash Refunds
+    # If there is STILL a refund remaining (either it wasn't a credit sale, 
+    # or the refund exceeded the debt), issue it as a cash out flow.
+    if refund_remaining > 0:
+        Payment.objects.create(
+            tenant=tenant,
+            branch_id=branch_id,
+            order=original_order, 
+            processed_by=cashier,
+            method=refund_method,
+            amount=-refund_remaining, # Negative amount signifies money leaving the drawer
+            reference_code=f"RET-{return_order.id}",
+            transaction_type = Payment.transaction_type('REFUND')
+        )
+    """order=original_order
+    order.status='Returned'
+    order.save()"""
+  
     return return_order
 
 

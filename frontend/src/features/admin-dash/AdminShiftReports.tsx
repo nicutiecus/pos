@@ -1,7 +1,8 @@
+// AdminShiftReports.tsx
 import React, { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
+import { OpenShiftsModal } from './OpenShiftsModal'; // Adjust import path as needed
 
-// --- Interfaces ---
 export interface AdminShiftReport {
   id: string | number;
   shift_code: string;
@@ -20,6 +21,11 @@ export interface AdminShiftReport {
 }
 
 const AdminShiftReports: React.FC = () => {
+  // --- Auth & Role State ---
+  const userRole = localStorage.getItem('userRole');
+  const localBranchId = localStorage.getItem('branchId');
+  const isAdmin = userRole === 'Tenant_Admin' || userRole === 'ADMIN';
+
   const [shifts, setShifts] = useState<AdminShiftReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,11 +37,13 @@ const AdminShiftReports: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
-  // --- NEW: Modal Fetching State ---
+  // --- Modal State ---
   const [selectedShiftId, setSelectedShiftId] = useState<string | number | null>(null);
   const [shiftDetails, setShiftDetails] = useState<any | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+
+  const [isOpenShiftsModalOpen, setIsOpenShiftsModalOpen] = useState(false);
 
   // Search Debounce
   useEffect(() => {
@@ -49,7 +57,7 @@ const AdminShiftReports: React.FC = () => {
     setCurrentPage(1);
   }, [debouncedSearchTerm]);
 
-  // Fetch Table Data
+  // Fetch Table Data (Closed Shifts)
   useEffect(() => {
     const fetchShifts = async () => {
       setIsLoading(true);
@@ -83,7 +91,7 @@ const AdminShiftReports: React.FC = () => {
     fetchShifts();
   }, [currentPage, debouncedSearchTerm]);
 
-  // --- NEW: Fetch Individual Shift Details ---
+  // Fetch Individual Shift Details (Closed Shifts)
   useEffect(() => {
     if (!selectedShiftId) {
       setShiftDetails(null);
@@ -94,7 +102,6 @@ const AdminShiftReports: React.FC = () => {
       setIsModalLoading(true);
       setModalError(null);
       try {
-        // Adjust standard ID vs shift_code depending on what your backend expects here!
         const response = await api.get(`/sales/reports/closed-shift/${selectedShiftId}/`);
         setShiftDetails(response.data);
       } catch (err: any) {
@@ -118,7 +125,18 @@ const AdminShiftReports: React.FC = () => {
           <p className="text-sm text-gray-500">Audit historical shift reconciliations and cash variances.</p>
         </div>
         
-        <div className="flex w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3">
+          <button 
+            onClick={() => setIsOpenShiftsModalOpen(true)}
+            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold px-4 py-3 rounded-lg shadow-sm transition-colors whitespace-nowrap flex items-center justify-center gap-2"
+          >
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+            Active Shifts
+          </button>
+
           <input 
             type="text" 
             placeholder="Search entire database..." 
@@ -136,7 +154,7 @@ const AdminShiftReports: React.FC = () => {
         </div>
       )}
 
-      {/* DATA TABLE */}
+      {/* DATA TABLE (Closed Shifts) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         {isLoading ? (
           <div className="flex justify-center items-center h-64 text-gray-500">
@@ -177,7 +195,6 @@ const AdminShiftReports: React.FC = () => {
                     return (
                       <tr 
                         key={shift.id} 
-                        // --- NEW: Pass the ID to trigger the fetch ---
                         onClick={() => setSelectedShiftId(shift.id)} 
                         className="hover:bg-blue-50/50 transition-colors cursor-pointer"
                       >
@@ -240,7 +257,15 @@ const AdminShiftReports: React.FC = () => {
         </div>
       </div>
 
-      {/* --- NEW: DYNAMIC SHIFT DETAILS MODAL --- */}
+      {/* RENDER THE EXTRACTED OPEN SHIFTS MODAL */}
+      <OpenShiftsModal 
+        isOpen={isOpenShiftsModalOpen} 
+        onClose={() => setIsOpenShiftsModalOpen(false)} 
+        isAdmin={isAdmin} 
+        localBranchId={localBranchId} 
+      />
+
+      {/* DYNAMIC SHIFT DETAILS MODAL (Closed Shifts) */}
       {selectedShiftId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-fade-in-up">
@@ -310,7 +335,6 @@ const AdminShiftReports: React.FC = () => {
                         <span className="font-medium text-gray-900">{shiftDetails.order_count}</span>
                         </div>
                         
-                        {/* Note: If your detailed endpoint returns specific breakdowns like POS vs Transfer, you can add them right here! */}
                         <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500">Expected Transfer:</span>
                         <span className="font-medium text-gray-900">₦{Number(shiftDetails.expected_transfer).toLocaleString()}</span>
@@ -350,8 +374,6 @@ const AdminShiftReports: React.FC = () => {
                             )}
                           </div>
                         </div>
-
-                        
                     </div>
                  </div>
               ) : null}

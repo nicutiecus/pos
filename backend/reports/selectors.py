@@ -207,13 +207,15 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
     sales_qs = SalesOrder.objects.filter(
         tenant=user.tenant,
         branch_id=branch_id,
-        created_at__date=report_date
+        created_at__date=report_date,
+        status="Completed"
     )
     
     sale_items_qs = SaleItem.objects.filter(
         order__tenant=user.tenant,
         order__branch_id=branch_id,
-        order__created_at__date=report_date
+        order__created_at__date=report_date,
+        order__status="Completed"
     )
 
     #  Revenue, Profit, and Cashiers
