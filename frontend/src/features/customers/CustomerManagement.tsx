@@ -412,7 +412,7 @@ const CustomerManagement: React.FC = () => {
                   </div>
                   
                   <div className="p-5 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-                      <span className="text-sm font-bold text-gray-500 uppercase">Total Owed:</span>
+                      <span className="text-sm font-bold text-gray-500 uppercase">{isAdmin? 'Total Owed:' : 'Branch Debt Owed:'}</span>
                       <span className="text-xl font-extrabold text-red-600">₦{Number(paymentCustomer.current_debt).toLocaleString()}</span>
                   </div>
 
@@ -451,7 +451,7 @@ const CustomerManagement: React.FC = () => {
                               type="number" 
                               required 
                               min="1"
-                              max={paymentCustomer.current_debt} // Prevent overpaying in this specific modal
+                              max={isAdmin? paymentCustomer.current_debt: paymentCustomer.branch_specific_debt} // Prevent overpaying in this specific modal
                               value={paymentForm.amount} 
                               onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})}
                               className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-lg font-bold text-gray-900" 
@@ -552,8 +552,8 @@ const CustomerManagement: React.FC = () => {
                       </div>
                       <div className="text-right">
                           <div className="text-xs font-bold text-gray-500 uppercase">Current Debt</div>
-                          <div className={`text-xl font-bold ${activeLedgerCustomer.current_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              ₦{Number(activeLedgerCustomer.current_debt).toLocaleString()}
+                          <div className={`text-xl font-bold ${(isAdmin? activeLedgerCustomer.current_debt: activeLedgerCustomer.branch_specific_debt) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              ₦{Number(isAdmin? activeLedgerCustomer.current_debt : activeLedgerCustomer.branch_specific_debt).toLocaleString()}
                           </div>
                       </div>
                   </div>
