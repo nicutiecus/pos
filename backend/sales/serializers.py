@@ -81,9 +81,17 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
 
 #Customer CRUD Serializer
 class CustomerSerializer(serializers.ModelSerializer):
+    branch_specific_debt = serializers.DecimalField(
+        source='calculated_branch_debt', 
+        max_digits=12, 
+        decimal_places=2, 
+        read_only=True,
+        default=0.00
+    )
     class Meta:
+        
         model = Customer
-        fields = ['id', 'name', 'phone', 'email', 'credit_limit', 'current_debt']
+        fields = ['id', 'name', 'phone', 'email', 'credit_limit', 'current_debt', 'branch_specific_debt']
         read_only_fields = ['current_debt'] # Debt is calculated, never set manually
 
 # Pay Debt Input Serializer

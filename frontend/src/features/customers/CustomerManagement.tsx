@@ -9,6 +9,7 @@ interface Customer {
   phone: string;
   credit_limit: number;
   current_debt: number;
+  branch_specific_debt: number;
   created_at?: string;
 }
 
@@ -208,8 +209,9 @@ const CustomerManagement: React.FC = () => {
     const handleOpenPayment = (customer: Customer) => {
       setPaymentCustomer(customer);
       // Auto-fill the amount with their total debt for convenience
+      const relevantDebt = isAdmin ? customer.current_debt : customer.branch_specific_debt;
       setPaymentForm({
-          amount: customer.current_debt.toString(),
+          amount: relevantDebt.toString(),
           method: 'Cash',
           notes: 'Debt repayment',
           branch_id: branchId
@@ -301,7 +303,7 @@ const CustomerManagement: React.FC = () => {
                 <span className="text-sm font-medium text-gray-700">Show Debtors Only</span>
             </label>
             <button 
-                onClick={() => { setEditingCustomer({ id: 0, name: '', phone: '', credit_limit: 0, current_debt: 0 }); setIsEditModalOpen(true); }}
+                onClick={() => { setEditingCustomer({ id: 0, name: '', phone: '', credit_limit: 0, current_debt: 0, branch_specific_debt: 0}); setIsEditModalOpen(true); }}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm"
             >
                 + New Customer
@@ -326,7 +328,7 @@ const CustomerManagement: React.FC = () => {
                                 Credit Limit {renderSortIndicator('credit_limit')}
                             </th>
                             <th onClick={() => handleSort('current_debt')} className="cursor-pointer hover:bg-gray-100 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase select-none transition-colors">
-                                Current Debt {renderSortIndicator('current_debt')}
+                                {isAdmin ? 'Total Debt' : 'Branch Debt'} {renderSortIndicator(isAdmin ? 'current_debt' : 'branch_specific_debt')}
                             </th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
@@ -342,12 +344,12 @@ const CustomerManagement: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">₦{Number(customer.credit_limit).toLocaleString()}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right">
                                         <span className={`font-bold ${customer.current_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                            ₦{Number(customer.current_debt).toLocaleString()}
+                                            ₦{Number(isAdmin? customer.current_debt: customer.branch_specific_debt).toLocaleString()}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-3">
                                         
-                                        {customer.current_debt > 0 && (
+                                        {(isAdmin? customer.current_debt: customer.branch_specific_debt) > 0 && (
                                             <button 
                                                 onClick={() => handleOpenPayment(customer)} 
                                                 className="text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded shadow-sm transition-colors"
