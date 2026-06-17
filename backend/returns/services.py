@@ -8,7 +8,7 @@ from decimal import Decimal
 
 @transaction.atomic
 def process_customer_return(*, tenant, branch_id, original_order,
-                            cashier, return_data: list, reason: str = "", refund_method: str='Cash'):
+                            cashier, return_data: list, reason: str = "", refund_method: str='POS'):
     """
     Processes a return transaction.
     return_data format:
