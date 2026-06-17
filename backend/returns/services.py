@@ -85,7 +85,7 @@ def process_customer_return(*, tenant, branch_id, original_order,
             )
 
     # FINANCIAL REVERSAL & DEBT RECONCILIATION
-    total_refund_amount=item_data['refund_amount']
+    total_refund_amount=return_order.total_refund_amount
     refund_remaining = total_refund_amount
 
     # 1. If there is a refund to process, and the original order belonged to a tracked customer
@@ -141,7 +141,7 @@ def process_customer_return(*, tenant, branch_id, original_order,
             method=refund_method,
             amount=-refund_remaining, # Negative amount signifies money leaving the drawer
             reference_code=f"RET-{return_order.id}",
-            transaction_type = Payment.transaction_type('REFUND')
+            transaction_type = 'Refund'
         )
     """order=original_order
     order.status='Returned'
