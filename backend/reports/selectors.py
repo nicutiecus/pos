@@ -43,12 +43,16 @@ def get_dashboard_stats(*, user, branch_id=None):
     # 4. Low Stock Alerts (Inventory Check)
     # We check products where total active batch quantity <= reorder_level
     # This is a bit complex, simplified for dashboard speed:
+    low_stock_count = 0
+    """
+    #Uncomment once the low_stock_count has been added to the Product model
     low_stock_count = Product.objects.filter(
         tenant=user.tenant,
         reorder_level__gt=0 # Only check products that track this
     ).annotate(
         current_stock=Sum('batches__quantity_on_hand')
     ).filter(current_stock__lte=F('reorder_level')).count()
+    """
 
     return {
         "sales_today": sales_today,
@@ -56,7 +60,7 @@ def get_dashboard_stats(*, user, branch_id=None):
         "orders_today": orders_count_today,
         "low_stock_count": low_stock_count
     }
-
+   
 def get_sales_chart_data(*, user, branch_id=None, days=7):
     """
     Returns sales grouped by day for the line chart.
@@ -81,7 +85,7 @@ def get_sales_chart_data(*, user, branch_id=None, days=7):
 
     return list(data)
 
-def get_top_selling_products(*, user, branch_id=None, limit=5):
+def get_top_selling_products(*, user, branch_id=None,  start_date=None, end_date=None, limit=5,):
     """
     Returns the top N best-selling products by revenue.
     """
@@ -90,11 +94,18 @@ def get_top_selling_products(*, user, branch_id=None, limit=5):
     if branch_id:
         query = query.filter(order__branch_id=branch_id)
 
+    if start_date:
+        query = query.filter(order__created_at__date__gte=start_date)
+    if end_date:
+        query = query.filter(order__created_at__date__lte=end_date)
+
+    
+
     return query.values(
         'product__name'
     ).annotate(
         total_revenue=Sum('subtotal'),
-        total_quantity=Sum('quantity')
+        total_quantity_sold=Sum('quantity')
     ).order_by('-total_revenue')[:limit]
 
 
@@ -105,6 +116,8 @@ def get_dashboard_metrics(*, user, branch_id=None, start_date=None, end_date=Non
     sales_qs = SalesOrder.objects.filter(tenant=user.tenant)
     expense_qs = Expense.objects.filter(tenant=user.tenant)
     customer_qs = Customer.objects.filter(tenant=user.tenant)
+
+    
 
     # 2. Role-Based Branch Filtering
     if user.role not in ['Admin', 'Super_Admin']:
@@ -127,7 +140,7 @@ def get_dashboard_metrics(*, user, branch_id=None, start_date=None, end_date=Non
     # 4. Perform the Aggregations (Let the database do the math!)
     
     # Total Revenue (Sum of all sales)
-    total_revenue = sales_qs.aggregate(total=Sum('final_total'))['total'] or 0.00
+    total_revenue = sales_qs.aggregate(total=Sum('total_amount'))['total'] or 0.00
     
     # Total Expenses (Sum of all expenses)
     total_expenses = expense_qs.aggregate(total=Sum('amount'))['total'] or 0.00
@@ -325,4 +338,122 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
         "payment_methods_breakdown": payment_breakdown,
         "items_sold_breakdown": items_breakdown,
         "intra_day_price_changes": price_changes_list
+    }
+
+
+
+def get_periodic_report(*, user, branch_id: str, start_date: str = None, end_date: str = None):
+    # Default to today if no date is provided
+    
+    # 1. Base Querysets
+    sales_qs = SalesOrder.objects.filter(
+        tenant=user.tenant,
+        branch_id=branch_id,
+        status="Completed"
+    )
+    if start_date:
+        sales_qs = sales_qs.filter(order__created_at__date__gte=start_date)
+    if end_date:
+        sales_qs = sales_qs.filter(order__created_at__date__lte=end_date)
+
+    
+    sale_items_qs = SaleItem.objects.filter(
+        order__tenant=user.tenant,
+        order__branch_id=branch_id,
+        order__status="Completed"
+    )
+    if start_date:
+        sale_items_qs = sale_items_qs.filter(order__created_at__date__gte=start_date)
+    if end_date:
+        sale_items_qs = sale_items_qs.filter(order__created_at__date__lte=end_date)
+
+    #  Revenue, Profit, and Cashiers
+    sales_aggregates = sales_qs.aggregate(
+        total_revenue=Coalesce(Sum('total_amount'), Decimal('0.00'), output_field=DecimalField()),
+        cashier_count=Count('user', distinct=True)
+    )
+    actual_revenue = sales_aggregates['total_revenue']
+
+    # 3. Total Cost of Goods Sold (Item Level)
+    cogs_aggregates = sale_items_qs.aggregate(
+        total_cost=Coalesce(Sum(F('quantity') * F('cost_price_at_sale')), Decimal('0.00'), output_field=DecimalField())
+    )
+    total_cogs = cogs_aggregates['total_cost']
+
+    total_profit = actual_revenue - total_cogs
+
+
+    #  Breakdown of Items Sold
+    items_breakdown = list(sale_items_qs.values(
+        product_name=F('product__name')
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('subtotal'),
+        total_cost=Sum(F('quantity')* F('cost_price_at_sale')),
+        item_profit = Sum('subtotal')-Sum(F('quantity')* F('cost_price_at_sale'))
+    ).order_by('-total_quantity'))
+
+    
+
+
+    # 4. Expected Cash by Payment Method
+    payments_qs = Payment.objects.filter(
+        tenant=user.tenant,
+        branch_id=branch_id,
+    )
+    if start_date:
+        payments_qs= payments_qs.filter(order__created_at__date__gte=start_date)
+    if end_date:
+        payments_qs= payments_qs.filter(order__created_at__date__lte=start_date)
+    
+    payment_breakdown = list(payments_qs.values('method','transaction_type').annotate(
+        total_amount=Sum('amount')
+    ))
+
+    # 5. Total Debt Repayment Made
+    customer_qs= CustomerLedger.objects.filter(
+        tenant=user.tenant,
+        branch_id = branch_id,
+        transaction_type=CustomerLedger.TransactionType.PAYMENT, 
+    )
+    if start_date:
+        customer_qs= customer_qs.filter(order__created_at__date__gte=start_date)
+    if end_date:
+        customer_qs= customer_qs.filter(order__created_at__date__lte=end_date)
+    debt_repayments = customer_qs.aggregate(
+        total_repaid=Coalesce(Sum('amount'), Decimal('0.00'), output_field=DecimalField())
+    )
+
+    #credit sales
+    # Part A: Full Credit Sales (Pending) -> The entire order amount is debt
+    sales_qs_credit=sales_qs.filter(payment_status='Pending')
+    pending_debt = sales_qs_credit.aggregate(
+        total=Coalesce(Sum('total_amount'), Decimal('0.00'), output_field=DecimalField())
+    )['total']
+
+    # Part B: Partial Sales -> Only the unpaid portion is debt
+    # (Total amount minus whatever cash/transfer they actually paid upfront)
+    sales_qs_partial=sales_qs_partial.filter(payment_status='Partial')
+    partial_debt = sales_qs_partial.aggregate(
+        total=Coalesce(Sum(F('total_amount') - F('amount_paid')), Decimal('0.00'), output_field=DecimalField())
+    )['total']
+
+    # Combine them for the final EOD figure
+    total_credit_sales = pending_debt + partial_debt
+
+
+    # 7. Construct Final Payload
+    return {
+        "report_date": start_date.strftime("%Y-%m-%d"),
+        "branch_id": branch_id,
+        "summary": {
+            "total_sales_revenue": actual_revenue,
+            "total_cost_of_goods": total_cogs,
+            "total_sales_profit": total_profit,
+            "total_debt_repayment_collected": debt_repayments['total_repaid'],
+            "total_credit_sales": total_credit_sales,
+            "number_of_active_cashiers": sales_aggregates['cashier_count'],
+        },
+        "payment_methods_breakdown": payment_breakdown,
+        "items_sold_breakdown": items_breakdown,
     }

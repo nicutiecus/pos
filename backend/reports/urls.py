@@ -1,6 +1,6 @@
 from django.urls import path
 from .apis import (DashboardStatsApi, SalesChartApi, TopProductsApi, DashboardApi, 
-                   RevenueTrendApi, ProfitReportAPIView, BranchEODReportApi)
+                   RevenueTrendApi, ProfitReportAPIView, BranchEODReportApi, PeriodicReportApi)
 
 urlpatterns = [
     path('dashboard-stats/', DashboardStatsApi.as_view(), name='dashboard-stats'),
@@ -12,4 +12,6 @@ urlpatterns = [
     path('profits/', ProfitReportAPIView.as_view(), name='profit-reports'),
     #EOD
     path('eod/<uuid:branch_id>/', BranchEODReportApi.as_view(), name='profit-reports'),
+    #Periodic
+    path('periodic/', PeriodicReportApi.as_view(), name='periodic-reports')
 ]

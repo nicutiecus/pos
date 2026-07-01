@@ -47,6 +47,7 @@ import ReportsDashboard from '../features/reports/ReportsDashboard';
 import AdminShiftReports from '../features/admin-dash/AdminShiftReports';
 import AdminSalesOrders from '../features/admin-dash/AdminSalesOrders';
 import AdminEODReport from '../features/admin-dash/AdminEODReport';
+import PeriodicReport from '../features/admin-dash/AdminPeriodicReport';
 //Settings
 import AdminSettings from '../features/admin-dash/AdminSettings';
 
@@ -121,7 +122,8 @@ const AppRouter: React.FC = () => {
             <Route path="transfer" element={<StockTransfers />} />
             <Route path="profit-report" element={<ProfitReport/>}/>
             <Route path="expenses" element={<ExpenseManagement/>}/>
-              <Route path="eodreport" element={<AdminEODReport/>}/>
+            <Route path="eodreport" element={<AdminEODReport/>}/>
+            <Route path="periodicreport" element={<PeriodicReport/>}/>
               <Route path="settings" element={<AdminSettings/>}/>
         </Route>
       </Route>

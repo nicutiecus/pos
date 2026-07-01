@@ -3,7 +3,7 @@ from .apis import (StockReceiveApi, StockLevelApi, InventoryLogListApi,
                    ExpiringStockApi, ProductCreateApi, CategoryListCreateApi, ProductCatalogApi,
                    StockTransferApi, StockTransferLogListApi, AcceptTransferApi, RejectTransferApi,
                    UpdateProductPriceApi, ProductPriceHistoryApi, OrganizationStockLevelsAPIView,
-                   RemoveStockAPIView, InventoryBatchListAPIView)
+                   RemoveStockAPIView, InventoryBatchListAPIView, CategoryDeleteApi)
 
 urlpatterns = [
     path('receive/', StockReceiveApi.as_view(), name='stock-receive'),
@@ -14,6 +14,7 @@ urlpatterns = [
     path('expiring/<uuid:branch_id>/', ExpiringStockApi.as_view(), name='stock-expiring'),
     path('products/', ProductCreateApi.as_view(), name='product-create'),
     path('categories/', CategoryListCreateApi.as_view(), name='category-list-create'),
+    path('categories/delete/<int:pk>/', CategoryDeleteApi.as_view(), name='category-list-delete'),
     path('logs/', InventoryLogListApi.as_view(), name='inventory-logs'),
     path('catalog/', ProductCatalogApi.as_view(), name='product-catalog'),
     #Initiate transfer 

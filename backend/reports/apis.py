@@ -2,7 +2,8 @@ from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .selectors import (get_dashboard_stats, get_sales_chart_data, get_top_selling_products, 
-                        get_7_day_revenue_trend, get_branch_eod_report)
+                        get_7_day_revenue_trend, get_branch_eod_report, get_dashboard_metrics,
+                        get_periodic_report)
 from rest_framework.views import APIView
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Value
 from django.db.models.functions import Coalesce, Cast
@@ -11,6 +12,7 @@ from decimal import Decimal
 from sales.models import SalesOrder, SaleItem
 from rest_framework.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
+from .serializers import DashboardMetricsSerializer
 
 
 class DashboardStatsApi(views.APIView):
@@ -36,22 +38,20 @@ class TopProductsApi(views.APIView):
 
     def get(self, request):
         branch_id = request.GET.get('branch_id')
-        data = get_top_selling_products(user=request.user, branch_id=branch_id)
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        data = get_top_selling_products(user=request.user, branch_id=branch_id, 
+                                        start_date= start_date, end_date=end_date)
         return Response(data, status=status.HTTP_200_OK)
     
-# common/apis.py
-from rest_framework import views, status
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 
-from .selectors import get_dashboard_metrics
-from .serializers import DashboardMetricsSerializer
 
 class DashboardApi(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         branch_id = request.GET.get('branch_id')
+        range= request.GET.get('range')
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
 
@@ -190,3 +190,32 @@ class BranchEODReportApi(APIView):
             
         except ValidationError as e:
             return Response({"error": str(e)}, status=400)
+
+
+class PeriodicReportApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, branch_id):
+        # Security: Ensure only Admins or the assigned Branch Manager can view this
+        admin_roles = ['Admin', 'Super_Admin', 'Tenant_Admin']
+        is_admin = getattr(request.user, 'role', '') in admin_roles
+        
+        if not is_admin and str(request.user.branch_id) != str(branch_id):
+            return Response({"error": "You do not have permission to view this branch's reports."}, status=403)
+
+        # Allow historical lookups via query param, e.g., ?date=2026-03-15
+        start_date = request.query_params.get('start_date')
+        end_date =  request.query_params.get('end_date')
+
+        try:
+            report_data = get_periodic_report(
+                user=request.user, 
+                branch_id=branch_id, 
+                start_date=start_date,
+                end_date = end_date
+            )
+            return Response(report_data, status=200)
+            
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=400)
+

@@ -12,6 +12,9 @@ const CategoryManagement: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Track which category is currently being deleted to show a loading state on that specific button
+  const [deletingId, setDeletingId] = useState<number | null>(null); 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Form State
@@ -24,7 +27,7 @@ const CategoryManagement: React.FC = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await api.get('/inventory/categories');
+      const response = await api.get('/inventory/categories/');
       setCategories(response.data);
     } catch (err) {
       console.error("Failed to load categories", err);
@@ -54,6 +57,34 @@ const CategoryManagement: React.FC = () => {
     }
   };
 
+  // --- DELETE LOGIC ---
+  const handleDelete = async (categoryId: number) => {
+    // 1. Ask for confirmation before deleting
+    if (!window.confirm("Are you sure you want to delete this category? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeletingId(categoryId);
+    setErrorMsg(null);
+
+    try {
+      // 2. Make the API call (Assuming Django REST standard DELETE route)
+      await api.delete(`/inventory/categories/delete/${categoryId}/`);
+      
+      // 3. Remove it from the local state so the UI updates immediately
+      setCategories(prev => prev.filter(cat => cat.id !== categoryId));
+    } catch (err) {
+      console.error("Failed to delete category", err);
+      if (isAxiosError(err)) {
+        setErrorMsg(err.response?.data?.message || 'Failed to delete category. It might be linked to existing products.');
+      } else {
+        setErrorMsg('An unexpected error occurred while deleting.');
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex justify-between items-center border-b border-gray-200 pb-4">
@@ -68,21 +99,21 @@ const CategoryManagement: React.FC = () => {
         <div className="md:col-span-1 bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-fit">
           <h3 className="text-sm font-bold text-gray-800 uppercase mb-4">Add Category</h3>
           
-          {errorMsg && <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded">{errorMsg}</div>}
+          {errorMsg && <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded border border-red-100">{errorMsg}</div>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Category Name</label>
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Seafood"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500" />
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Description (Optional)</label>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Fresh and frozen fish..."
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500" />
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 outline-none" />
             </div>
             <button type="submit" disabled={isSubmitting} 
-              className="w-full bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700 disabled:opacity-50">
+              className="w-full bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
               {isSubmitting ? 'Saving...' : 'Create Category'}
             </button>
           </form>
@@ -93,20 +124,30 @@ const CategoryManagement: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Description</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
-                  <tr><td colSpan={2} className="px-6 py-4 text-center text-gray-500">Loading categories...</td></tr>
+                  <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-500 font-medium">Loading categories...</td></tr>
               ) : categories.length === 0 ? (
-                  <tr><td colSpan={2} className="px-6 py-4 text-center text-gray-500">No categories defined yet.</td></tr>
+                  <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-500 font-medium">No categories defined yet.</td></tr>
               ) : (
                 categories.map((cat) => (
-                  <tr key={cat.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{cat.name}</td>
+                  <tr key={cat.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{cat.name}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{cat.description || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => handleDelete(cat.id)}
+                        disabled={deletingId === cat.id}
+                        className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {deletingId === cat.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}

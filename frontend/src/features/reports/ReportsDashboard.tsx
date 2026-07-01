@@ -9,7 +9,7 @@ interface Branch {
 
 interface ReportSummary {
   total_revenue: number;
-  total_orders: number;
+  total_sales_count: number;
   average_order_value: number;
   total_cost?: number; // Optional: If backend calculates profit
   gross_profit?: number;
@@ -67,12 +67,19 @@ const ReportsDashboard: React.FC = () => {
 
         // Fetch Summary Metrics and Top Products concurrently
         const [summaryRes, productsRes] = await Promise.all([
-          api.get(`/reports/summary?${params.toString()}`),
+          api.get(`/reports/dashboard/metrics?${params.toString()}`),
           api.get(`/reports/top-products?${params.toString()}`)
         ]);
 
         setSummary(summaryRes.data);
-        setTopProducts(productsRes.data);
+        // Map the backend payload keys to match your frontend interface
+        const mappedProducts = productsRes.data.map((item: any) => ({
+            product_name: item.product__name,
+            sku: item.sku || 'N/A', // Providing a fallback since sku is missing in the payload
+            quantity_sold: item.total_quantity_sold,
+            revenue: item.total_revenue
+        }));
+        setTopProducts(mappedProducts);
 
       } catch (err) {
         console.error("Failed to fetch reports", err);
@@ -86,6 +93,8 @@ const ReportsDashboard: React.FC = () => {
         fetchReports();
     }
   }, [selectedBranch, dateRange, customStart, customEnd]);
+
+
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -164,7 +173,7 @@ const ReportsDashboard: React.FC = () => {
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-green-500">
                     <div className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-1">Total Sales/Orders</div>
                     <div className="text-3xl font-extrabold text-gray-900">
-                        {summary?.total_orders?.toLocaleString() || 0}
+                        {summary?.total_sales_count?.toLocaleString() || 0}
                     </div>
                 </div>
 

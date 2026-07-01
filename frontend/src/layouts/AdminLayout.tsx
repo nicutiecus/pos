@@ -132,6 +132,9 @@ const AdminLayout: React.FC = () => {
                 <Link to="/admin/eodreport" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                   End of Day Reports
                 </Link>
+                <Link to="/admin/periodicreport" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                  Periodic Reports
+                </Link>
               
                 
                 {/* <Link to="" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">

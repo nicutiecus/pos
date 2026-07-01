@@ -19,6 +19,7 @@ export interface OrderItem {
   unit_price: number;
   subtotal: number;
 }
+
 export interface Payment {
   method: string;
   amount: string;
@@ -41,68 +42,100 @@ export interface OrderDetail {
     name: string;
     phone: string;
   }
-};
+}
+
+// Added Branch Interface
+interface Branch {
+  id: string | number;
+  name: string;
+}
 
 const AdminSalesOrders: React.FC = () => {
+  // --- Global Auth State ---
+  const userRole = localStorage.getItem('userRole');
+  const localBranchId = localStorage.getItem('branchId');
+  const isAdmin = userRole === 'Tenant_Admin' || userRole === 'ADMIN';
+
+  // --- Data State ---
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Pagination & Search State
+  // --- Branch Filter State ---
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [filterBranchId, setFilterBranchId] = useState<string | number>(isAdmin ? '' : (localBranchId || ''));
+
+ 
+
+  // --- Pagination & Search State ---
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrev, setHasPrev] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
 
-  // Modal Fetching State
+  // --- Modal Fetching State ---
   const [selectedOrderId, setSelectedOrderId] = useState<string | number | null>(null);
   const [orderDetails, setOrderDetails] = useState<OrderDetail | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
+  // 1. Fetch Branches (Admins Only)
+  useEffect(() => {
+    if (isAdmin) {
+      const fetchBranches = async () => {
+        try {
+          const res = await api.get('/branches/');
+          setBranches(res.data);
+        } catch (err) {
+          console.error("Failed to fetch branches:", err);
+        }
+      };
+      fetchBranches();
+    }
+  }, [isAdmin]);
 
-  
+  // 2. Fetch Orders logic
+  const fetchOrders = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await api.get('/sales/list/', {
+        params: { 
+          page: currentPage, 
+          search: searchTerm,
+          branch_id: filterBranchId || undefined // Pass branch_id for filtering
+        }
+      });
 
-  
-    const fetchOrders = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        // NOTE: Adjust this endpoint to match your Django URL for listing sales orders
-        const response = await api.get('/sales/list/', {
-            params: { page: currentPage, search: searchTerm }
-        });
+      const data = response.data;
+      const fetchedOrders = data.results ? data.results : (Array.isArray(data) ? data : []);
 
-        const data = response.data;
-        const fetchedOrders = data.results ? data.results : (Array.isArray(data) ? data : []);
+      setHasNext(!!data.next);
+      setHasPrev(!!data.previous);
+      setOrders(fetchedOrders);
+    } catch (err: any) {
+      console.error("Failed to fetch orders:", err);
+      setError(err.response?.data?.message || err.response?.data?.detail || "Failed to load sales orders.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-        setHasNext(!!data.next);
-        setHasPrev(!!data.previous);
-        setOrders(fetchedOrders);
-      } catch (err: any) {
-        console.error("Failed to fetch orders:", err);
-        setError(err.response?.data?.message || err.response?.data?.detail || "Failed to load sales orders.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-// 2. Trigger fetch on page/search change (with built-in debounce)
+  // 3. Trigger fetch on search, page, or branch change (with built-in debounce)
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchOrders();
     }, 500);
 
-    // Cleanup the timeout if the user types again before 500ms
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, currentPage]);
+  }, [searchTerm, currentPage, filterBranchId]); // Added filterBranchId dependency
 
-  // 3. Reset to page 1 ONLY when the search term changes
+  // 4. Reset to page 1 ONLY when the search term or branch filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, filterBranchId]);
 
-  // 4. Fetch Individual Order Details
+  // 5. Fetch Individual Order Details
   useEffect(() => {
     if (!selectedOrderId) {
       setOrderDetails(null);
@@ -113,7 +146,6 @@ const AdminSalesOrders: React.FC = () => {
       setIsModalLoading(true);
       setModalError(null);
       try {
-        // NOTE: Adjust this endpoint to match your Django URL for a single order's details
         const response = await api.get(`/sales/${selectedOrderId}/`);
         setOrderDetails(response.data);
       } catch (err: any) {
@@ -151,10 +183,25 @@ const AdminSalesOrders: React.FC = () => {
           <p className="text-sm text-gray-500">View all transactions, receipts, and credit sales.</p>
         </div>
         
-        <div className="flex w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
+          {/* Branch Filter (Admins Only) */}
+          {isAdmin && (
+            <select 
+              value={filterBranchId}
+              onChange={(e) => setFilterBranchId(e.target.value)}
+              className="w-full sm:w-auto p-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-gray-50 cursor-pointer"
+            >
+              <option value="">All Branches</option>
+              {branches.map(branch => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Search Input */}
           <input 
             type="text" 
-            placeholder="Search receipt ID, customer, or cashier..." 
+            placeholder="Search receipt ID, customer..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full sm:w-80 p-3 pl-4 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-shadow font-medium text-sm"

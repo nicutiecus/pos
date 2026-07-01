@@ -8,7 +8,8 @@ from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            RemoveStockSerializer)
 from .services import (receive_stock_service, create_product_service, 
                        create_category_service, accept_transfer_service, initiate_transfer_service,
-                       reject_transfer_service, update_product_price_service, remove_stock_service)
+                       reject_transfer_service, update_product_price_service, remove_stock_service,
+                       remove_category_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
                         get_product_price_history, get_organization_stock_levels, get_inventory_batches
@@ -130,6 +131,24 @@ class CategoryListCreateApi(views.APIView):
         # Return the created category so the frontend can immediately add it to the dropdown
         return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
     
+
+class CategoryDeleteApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, pk):
+            try:
+                # Pass the request user and the category ID (pk) from the URL to your service
+                remove_category_service(user=request.user, category_id=pk)
+                return Response(status=status.HTTP_204_NO_CONTENT)
+                
+            except ValidationError as e:
+                # If the category has products, the service raises a ValidationError.
+                # Catch it and send the friendly message back to the React frontend.
+                # If products are still attached, this catches the error and sends it to React
+                error_message = str(e.message) if hasattr(e, 'message') else str(e[0])
+                return Response(
+                    {"message": error_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
 
 class InventoryLogListApi(views.APIView):

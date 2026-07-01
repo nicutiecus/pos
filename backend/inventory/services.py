@@ -84,6 +84,32 @@ def create_category_service(*, user, name: str) -> Category:
     )
     return category
 
+def remove_category_service(*, user, category_id: int):
+    """
+    Deletes a category for the user's tenant.
+    Prevents deletion if products are currently assigned to it.
+    """
+    # 1. Find the category and ensure it belongs to this tenant
+    category = Category.objects.filter(id=category_id, tenant=user.tenant).first()
+    
+    if not category:
+        raise ValidationError("Category not found or you do not have permission to delete it.")
+
+    # 2. Safety Check: Ensure no products are using this category
+    # Query the Product table to see if any exist with this category_id
+    has_linked_products = Product.objects.filter(category_id=category_id, tenant=user.tenant).exists()
+    
+    if has_linked_products:
+        raise ValidationError(
+            "Cannot delete this category because it contains active products. "
+            "Please reassign or delete the products first."
+        )
+
+    # 3. Delete the category
+    category.delete()
+    
+    return True
+
 
 
 
