@@ -2,67 +2,217 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from common.models import Branch
 from .models import (Product, InventoryBatch, Category,
-                      StockTransferLog, ProductPriceHistory, InventoryLog)
+                      StockTransferLog, ProductPriceHistory, InventoryLog, Supplier, 
+                      PurchaseOrder, PurchaseOrderItem, PurchaseInvoice, PurchaseInvoiceItem, SupplierLedger )
 from decimal import Decimal
 import random
 import string
+from django.db.models import ProtectedError
 
 
-def receive_stock_service(
+
+def create_purchase_order_service(
     *, 
     user, 
     branch_id: str, 
+    supplier_id: str, 
     items: list, 
+    expected_delivery_date: str = None,
     notes: str = ""
-) -> list[InventoryBatch]:
+) -> PurchaseOrder:
     """
-    Receives stock into a branch, creating individual inventory batches.
+    Creates a draft Purchase Order (PO) to be sent to a supplier.
+    This does NOT affect inventory or supplier debt.
+    
+    Expected items format:
+    [
+        {'product_id': 'uuid-1', 'expected_quantity': 50, 'agreed_unit_price': 1200.00},
+        {'product_id': 'uuid-2', 'expected_quantity': 20, 'agreed_unit_price': 5000.00}
+    ]
     """
     
-    # 1. Validation: Ensure Branch exists and belongs to User's Tenant
+    # 1. Validate Branch and Supplier belong to the user's tenant
     branch = Branch.objects.filter(id=branch_id, tenant=user.tenant).first()
+    supplier = Supplier.objects.filter(id=supplier_id, tenant=user.tenant).first()
+    
     if not branch:
         raise ValidationError("Invalid branch or branch belongs to another organization.")
-
-    created_batches = []
+    if not supplier:
+        raise ValidationError("Invalid supplier selected.")
+    if not items:
+        raise ValidationError("A purchase order must contain at least one item.")
 
     with transaction.atomic():
+        # 2. Create the base Purchase Order
+        purchase_order = PurchaseOrder.objects.create(
+            tenant=user.tenant,
+            branch=branch,
+            supplier=supplier,
+            ordered_by=user,
+            expected_delivery_date=expected_delivery_date,
+            total_estimated_amount=Decimal('0.00'), # Will calculate below
+            status=PurchaseOrder.OrderStatus.DRAFT,
+            notes=notes
+        )
+
+        total_estimated_amount = Decimal('0.00')
+
+        # 3. Process each item in the order
         for item in items:
-            # 2. Validation: Ensure Product belongs to Tenant
             product = Product.objects.filter(id=item['product_id'], tenant=user.tenant).first()
             if not product:
                 raise ValidationError(f"Product ID {item['product_id']} not found.")
 
-            # 3. Create the Batch
-            # Note: We don't just 'add to number'. In a cold room, 
-            # we track specific batches for expiry management.
+            quantity = Decimal(str(item['expected_quantity']))
+            unit_price = Decimal(str(item['agreed_unit_price']))
+            subtotal = quantity * unit_price
+
+            # Create the Line Item
+            PurchaseOrderItem.objects.create(
+                order=purchase_order,
+                product=product,
+                expected_quantity=quantity,
+                agreed_unit_price=unit_price,
+                subtotal=subtotal
+            )
+
+            total_estimated_amount += subtotal
+
+        # 4. Update the total amount on the parent order
+        purchase_order.total_estimated_amount = total_estimated_amount
+        purchase_order.save(update_fields=['total_estimated_amount'])
+
+    return purchase_order
+
+def receive_stock_service(
+    *, 
+    user, 
+    branch_id: str,
+    supplier_id: str, # NEW: Must know who sent it
+    items: list, 
+    purchase_order_id: str = None, # NEW: Optional link to a PO
+    amount_paid_upfront: Decimal = Decimal('0.00'), # NEW: If cash was handed to the driver
+    notes: str = ""
+) -> PurchaseInvoice:
+    """
+    Receives stock into a branch, creates the invoice, generates batches, 
+    and updates the supplier's financial ledger.
+    """
+    
+    # 1. Validation
+    branch = Branch.objects.filter(id=branch_id, tenant=user.tenant).first()
+    supplier = Supplier.objects.filter(id=supplier_id, tenant=user.tenant).first()
+    if not branch or not supplier:
+        raise ValidationError("Invalid branch or supplier.")
+
+    po = None
+    if purchase_order_id:
+        po = PurchaseOrder.objects.filter(id=purchase_order_id, tenant=user.tenant).first()
+
+    with transaction.atomic():
+        # 2. Create the Draft Invoice
+        invoice = PurchaseInvoice.objects.create(
+            tenant=user.tenant,
+            branch=branch,
+            supplier=supplier,
+            received_by=user,
+            purchase_order=po,
+            amount_paid=amount_paid_upfront,
+            total_amount=Decimal('0.00'), # We will calculate this below
+            status=PurchaseInvoice.InvoiceStatus.CONFIRMED
+        )
+
+        total_invoice_amount = Decimal('0.00')
+
+        # 3. Process Items: Create Batches and Invoice Items
+        for item in items:
+            product = Product.objects.filter(id=item['product_id'], tenant=user.tenant).first()
+            if not product:
+                raise ValidationError(f"Product ID {item['product_id']} not found.")
+
+            quantity = Decimal(str(item['quantity']))
+            cost_price = Decimal(str(item['cost_price']))
+            subtotal = quantity * cost_price
+
+            # a. Create the Physical Batch
             batch = InventoryBatch.objects.create(
                 tenant=user.tenant,
                 branch=branch,
                 product=product,
-                batch_number=item['batch_number'],
+                batch_number=item.get('batch_number', f"RCV-{invoice.id}"), # Auto-generate if missing
                 expiry_date=item.get('expiry_date'),
-                quantity_on_hand=item['quantity'],
-                cost_price_at_receipt=item['cost_price'],
+                quantity_on_hand=quantity,
+                cost_price_at_receipt=cost_price,
                 status=InventoryBatch.Status.ACTIVE
             )
-            created_batches.append(batch)
-            
-            # Optional: Log this action in a 'StockMovementLog' table here
-            for item in items:
-                InventoryLog.objects.create(
+
+            # b. Create the Invoice Line Item
+            PurchaseInvoiceItem.objects.create(
+                invoice=invoice,
+                product=product,
+                batch=batch, # Link the physical stock to the financial document
+                received_quantity=quantity,
+                actual_unit_price=cost_price,
+                subtotal=subtotal
+            )
+
+            # c. Log the physical movement
+            InventoryLog.objects.create(
                 tenant=user.tenant,
                 branch_id=branch_id,
-                product_id=item['product_id'],
+                product_id=product.id,
                 user=user,
                 transaction_type=InventoryLog.TransactionType.ADDITION,
-                quantity=item['quantity'], # Positive because stock is arriving
-                total_value=item['quantity'] * item['cost_price'], # Cost of goods received
-                notes=notes
+                quantity=quantity,
+                total_value=subtotal,
+                notes=f"Received via Invoice {invoice.id}. {notes}"
             )
-            
 
-    return created_batches
+            total_invoice_amount += subtotal
+
+        # 4. Finalize Invoice Financials
+        invoice.total_amount = total_invoice_amount
+        
+        if amount_paid_upfront >= total_invoice_amount:
+            invoice.payment_status = PurchaseInvoice.PaymentStatus.PAID
+        elif amount_paid_upfront > 0:
+            invoice.payment_status = PurchaseInvoice.PaymentStatus.PARTIAL
+        else:
+            invoice.payment_status = PurchaseInvoice.PaymentStatus.PENDING
+            
+        invoice.save()
+
+        # 5. Update Supplier Ledger (Accounts Payable)
+        # Create a BILL entry for the total cost of the goods received
+        SupplierLedger.objects.create(
+            tenant=user.tenant,
+            supplier=supplier,
+            branch=branch,
+            transaction_type='BILL', # Or 'PURCHASE' based on your TextChoices
+            amount=total_invoice_amount,
+            reference_id=invoice.id,
+            notes=f"Stock received on Invoice {invoice.id}"
+        )
+
+        # If money was paid immediately, log the payment to reduce the debt
+        if amount_paid_upfront > 0:
+            SupplierLedger.objects.create(
+                tenant=user.tenant,
+                supplier=supplier,
+                branch=branch,
+                transaction_type='PAYMENT',
+                amount=amount_paid_upfront,
+                reference_id=invoice.id,
+                notes=f"Upfront payment for Invoice {invoice.id}"
+            )
+
+        # 6. Update Purchase Order Status (if applicable)
+        if po:
+            # You could add logic here to check if partial or full, but for now:
+            po.status = PurchaseOrder.OrderStatus.RECEIVED
+            po.save()
+
+    return invoice
 
 def create_product_service(*, user, data):
     category_id = data.pop('category_id', None)
@@ -351,3 +501,68 @@ def remove_stock_service(*, user, product_id, branch_id, quantity, reason, notes
     )
 
     return True
+
+
+
+def create_supplier_service(*, user, name: str, email: str, phone, address, contact_person, 
+                            bank_details, tax_identification_number=None, current_debt=None, debt_limit=None) -> Supplier:
+    """
+    Creates a new supplier for the user's tenant.
+    """
+    supplier = Supplier.objects.create(
+        tenant=user.tenant,
+        name=name,
+        email= email,
+        phone=phone,
+        address= address,
+        contact_person= contact_person,
+        bank_details= bank_details,
+        tax_identification_number= tax_identification_number,
+        current_debt = current_debt,
+        debt_limit= debt_limit
+    )
+    return supplier
+
+
+
+
+def update_supplier_service(*, user, supplier_id: str, data: dict) -> Supplier:
+    """
+    Updates specific fields on a supplier.
+    """
+    supplier = Supplier.objects.filter(id=supplier_id, tenant=user.tenant).first()
+    
+    if not supplier:
+        raise Supplier.DoesNotExist("Supplier not found.")
+
+    # Loop through the provided data and dynamically update the fields
+    for field, value in data.items():
+        setattr(supplier, field, value)
+        
+    supplier.save()
+    
+    return supplier
+
+
+def delete_supplier_service(*, user, supplier_id: str):
+    """
+    Safely deletes a supplier. Prevents deletion if they have outstanding debt
+    or historical purchase orders.
+    """
+    supplier = Supplier.objects.filter(id=supplier_id, tenant=user.tenant).first()
+    
+    if not supplier:
+        raise Supplier.DoesNotExist("Supplier not found.")
+
+    # Business Logic Check: Do not delete if we still owe them money!
+    if supplier.current_debt > 0:
+        raise ValidationError("Cannot delete a supplier with an outstanding debt balance. Clear the debt first.")
+
+    try:
+        supplier.delete()
+    except ProtectedError:
+        # Caught because PurchaseOrder.supplier is models.PROTECT
+        raise ValidationError(
+            "Cannot delete this supplier because they are linked to existing purchase orders. "
+            "Consider renaming them to 'DO NOT USE - [Name]' instead."
+        )

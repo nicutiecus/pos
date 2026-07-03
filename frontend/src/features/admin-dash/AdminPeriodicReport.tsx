@@ -76,7 +76,7 @@ const PeriodicReport: React.FC = () => {
         // NOTE: Adjust this URL to match your Django EOD endpoint
         const response = await api.get(`/reports/periodic/`, {
           params: { 
-            branch_id: selectedBranchId, 
+            branch_id: selectedBranchId || undefined, 
             start_date: startDate,
             end_date: endDate
           }
@@ -168,7 +168,7 @@ const PeriodicReport: React.FC = () => {
             onChange={(e) => setSelectedBranchId(e.target.value)}
             className="w-full sm:w-64 p-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-sm bg-white"
           >
-            <option value="" disabled>-- Select Branch --</option>
+            <option value="">-- All Branches --</option>
             {branches.map(b => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}

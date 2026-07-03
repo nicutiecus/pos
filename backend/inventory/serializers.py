@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Product, Category, InventoryBatch, StockTransferLog, ProductPriceHistory, InventoryLog
+from .models import (Product, Category, InventoryBatch, StockTransferLog, ProductPriceHistory, 
+                     InventoryLog, Supplier, PurchaseOrder)
 
 
 class StockReceiveItemSerializer(serializers.Serializer):
@@ -172,3 +173,71 @@ class InventoryBatchSerializer(serializers.ModelSerializer):
             'status', 
             'created_at'
         ]
+
+
+
+class PurchaseOrderItemCreateSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(
+        help_text="The ID of the product being ordered."
+    )
+    expected_quantity = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        min_value=0.01, # Prevents ordering 0 or negative quantities
+        error_messages={"min_value": "Quantity must be greater than zero."}
+    )
+    agreed_unit_price = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        min_value=0.00
+    )
+
+class PurchaseOrderCreateSerializer(serializers.Serializer):
+    branch_id = serializers.UUIDField()
+    supplier_id = serializers.CharField(max_length=50)
+    
+    # allow_null lets the frontend explicitly send `null` if the date is unknown
+    expected_delivery_date = serializers.DateField(required=False, allow_null=True)
+    
+    # allow_blank lets the frontend send an empty string ""
+    notes = serializers.CharField(required=False, allow_blank=True)
+    
+    # Here we nest the item serializer. 
+    # allow_empty=False ensures they can't send a PO with 0 items!
+    purchase_items = PurchaseOrderItemCreateSerializer(many=True, allow_empty=False)
+
+
+
+class PurchaseOrderListSerializer(serializers.ModelSerializer):
+    # Extract names from the related foreign keys to match frontend expectations
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+
+    class Meta:
+        model = PurchaseOrder
+        fields = [
+            'id', 
+            'supplier_name', 
+            'branch_name', 
+            'expected_delivery_date', 
+            'total_estimated_amount', 
+            'status', 
+            'created_at'
+        ]
+
+
+    
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = ['id', 'name','email', 'phone', 'address', 'contact_person', 'bank_details',
+                 'tax_identification_number', 'current_debt','debt_limit']
+        read_only_fields = ['id']
+
+    def validate_name(self, value):
+        # Security: Check uniqueness within the specific tenant
+        user = self.context['request'].user
+        if Supplier.objects.filter(name__iexact=value, tenant=user.tenant).exists():
+            raise serializers.ValidationError("A supplier with this name already exists.")
+        return value
+    

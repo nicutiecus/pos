@@ -195,10 +195,11 @@ class BranchEODReportApi(APIView):
 class PeriodicReportApi(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, branch_id):
+    def get(self, request):
         # Security: Ensure only Admins or the assigned Branch Manager can view this
         admin_roles = ['Admin', 'Super_Admin', 'Tenant_Admin']
         is_admin = getattr(request.user, 'role', '') in admin_roles
+        branch_id = request.query_params.get('branch_id')
         
         if not is_admin and str(request.user.branch_id) != str(branch_id):
             return Response({"error": "You do not have permission to view this branch's reports."}, status=403)

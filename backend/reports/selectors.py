@@ -342,30 +342,62 @@ def get_branch_eod_report(*, user, branch_id: str, target_date: str = None):
 
 
 
-def get_periodic_report(*, user, branch_id: str, start_date: str = None, end_date: str = None):
-    # Default to today if no date is provided
-    
+def get_periodic_report(*, user, branch_id: str = None, start_date: str = None, end_date: str = None):
+
+    #Date parsing
+    if start_date:
+        parsed_start_date = parse_date(start_date)
+    else:
+        parsed_start_date = timezone.now().date()
+        
+    if end_date:
+        parsed_end_date = parse_date(end_date)
+    else:
+        parsed_end_date = timezone.now().date()
+
     # 1. Base Querysets
     sales_qs = SalesOrder.objects.filter(
         tenant=user.tenant,
-        branch_id=branch_id,
         status="Completed"
     )
-    if start_date:
-        sales_qs = sales_qs.filter(order__created_at__date__gte=start_date)
-    if end_date:
-        sales_qs = sales_qs.filter(order__created_at__date__lte=end_date)
-
     
     sale_items_qs = SaleItem.objects.filter(
         order__tenant=user.tenant,
-        order__branch_id=branch_id,
         order__status="Completed"
     )
+
+    payments_qs = Payment.objects.filter(
+        tenant=user.tenant,
+    )
+
+    customer_qs = CustomerLedger.objects.filter(
+        tenant=user.tenant,
+        transaction_type=CustomerLedger.TransactionType.PAYMENT, 
+    )
+
+    # branch ID
+    if user.role not in ['Admin', 'Tenant_Admin', 'Super_Admin']:
+        branch_id = user.branch_id
+
+    if branch_id:
+        sales_qs = sales_qs.filter(branch_id=branch_id)
+        sale_items_qs = sale_items_qs.filter(order__branch_id=branch_id)
+        payments_qs = payments_qs.filter(branch_id=branch_id)
+        customer_qs = customer_qs.filter(branch_id=branch_id)
+    
+
+    #apply date filters
     if start_date:
-        sale_items_qs = sale_items_qs.filter(order__created_at__date__gte=start_date)
+        sales_qs = sales_qs.filter(created_at__date__gte=parsed_start_date)
+        sale_items_qs = sale_items_qs.filter(order__created_at__date__gte=parsed_start_date)
+        payments_qs= payments_qs.filter(created_at__date__gte=parsed_start_date)
+        customer_qs = customer_qs.filter(created_at__date__gte=parsed_start_date)
+
     if end_date:
-        sale_items_qs = sale_items_qs.filter(order__created_at__date__lte=end_date)
+        sales_qs = sales_qs.filter(created_at__date__lte=parsed_end_date)
+        sale_items_qs = sale_items_qs.filter(order__created_at__date__lte=parsed_end_date)
+        payments_qs= payments_qs.filter(created_at__date__lte=parsed_end_date)
+        customer_qs = customer_qs.filter(created_at__date__gte=parsed_end_date)
 
     #  Revenue, Profit, and Cashiers
     sales_aggregates = sales_qs.aggregate(
@@ -397,29 +429,15 @@ def get_periodic_report(*, user, branch_id: str, start_date: str = None, end_dat
 
 
     # 4. Expected Cash by Payment Method
-    payments_qs = Payment.objects.filter(
-        tenant=user.tenant,
-        branch_id=branch_id,
-    )
-    if start_date:
-        payments_qs= payments_qs.filter(order__created_at__date__gte=start_date)
-    if end_date:
-        payments_qs= payments_qs.filter(order__created_at__date__lte=start_date)
+
     
     payment_breakdown = list(payments_qs.values('method','transaction_type').annotate(
         total_amount=Sum('amount')
     ))
 
     # 5. Total Debt Repayment Made
-    customer_qs= CustomerLedger.objects.filter(
-        tenant=user.tenant,
-        branch_id = branch_id,
-        transaction_type=CustomerLedger.TransactionType.PAYMENT, 
-    )
-    if start_date:
-        customer_qs= customer_qs.filter(order__created_at__date__gte=start_date)
-    if end_date:
-        customer_qs= customer_qs.filter(order__created_at__date__lte=end_date)
+
+
     debt_repayments = customer_qs.aggregate(
         total_repaid=Coalesce(Sum('amount'), Decimal('0.00'), output_field=DecimalField())
     )
@@ -433,7 +451,7 @@ def get_periodic_report(*, user, branch_id: str, start_date: str = None, end_dat
 
     # Part B: Partial Sales -> Only the unpaid portion is debt
     # (Total amount minus whatever cash/transfer they actually paid upfront)
-    sales_qs_partial=sales_qs_partial.filter(payment_status='Partial')
+    sales_qs_partial=sales_qs.filter(payment_status='Partial')
     partial_debt = sales_qs_partial.aggregate(
         total=Coalesce(Sum(F('total_amount') - F('amount_paid')), Decimal('0.00'), output_field=DecimalField())
     )['total']
@@ -444,7 +462,8 @@ def get_periodic_report(*, user, branch_id: str, start_date: str = None, end_dat
 
     # 7. Construct Final Payload
     return {
-        "report_date": start_date.strftime("%Y-%m-%d"),
+        "start_date": parsed_start_date.strftime("%Y-%m-%d"),
+        "end_date": parsed_end_date.strftime("%Y-%m-%d"),
         "branch_id": branch_id,
         "summary": {
             "total_sales_revenue": actual_revenue,

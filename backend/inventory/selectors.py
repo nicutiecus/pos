@@ -1,10 +1,12 @@
 from django.db.models import Sum, F, Q, DecimalField
 from django.utils import timezone
-from .models import InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory, InventoryLog
+from .models import (InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory, InventoryLog, Supplier,
+                     PurchaseOrder)
 from django.core.exceptions import PermissionDenied
 from django.core.cache import cache
 from .serializers import ProductCatalogSerializer # We use the serializer here now
 from decimal import Decimal
+from django.utils import timezone
 
 
 
@@ -213,7 +215,6 @@ def get_product_price_history(*, user, product_id: str):
     ).select_related('changed_by').order_by('-created_at')
 
 
-from .models import InventoryBatch
 
 def get_inventory_batches(*, user, branch_id=None, active_only=True):
     """
@@ -241,3 +242,30 @@ def get_inventory_batches(*, user, branch_id=None, active_only=True):
 
     # Sort by nearest expiry date first, then by creation date
     return query.order_by('expiry_date', 'created_at')
+
+def get_suppliers(*, user):
+
+    query= Supplier.objects.filter(tenant= user.tenant)
+
+    return query.order_by('created_at')
+
+def get_purchase_orders(*, user, branch_id, search_query=None):
+
+    qs = PurchaseOrder.objects.filter(tenant=user.tenant).select_related(
+        'supplier','branch','ordered_by'
+    )
+
+    if user.role not in ['Admin', 'Tenant_Admin', 'Super_Admin']:
+        qs = qs.filter(branch=user.branch_id)
+    elif branch_id:
+        # If Admin explicitly filters by a branch
+        qs = qs.filter(branch_id=branch_id)
+
+    # 🔍 Search Functionality
+    if search_query:
+        qs = qs.filter(
+            Q(id__icontains=search_query) | 
+            Q(supplier__name__icontains=search_query)
+        )
+
+    return qs.order_by('created_at')

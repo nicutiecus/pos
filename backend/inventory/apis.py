@@ -5,21 +5,25 @@ from users.permissions import HasRequiredPermission
 from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            CategorySerializer, InventoryLogSerializer, UpdateProductPriceSerializer,
                            StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer,
-                           RemoveStockSerializer)
+                           RemoveStockSerializer, PurchaseOrderCreateSerializer, InventoryBatchSerializer,
+                           SupplierSerializer, PurchaseOrderListSerializer)
 from .services import (receive_stock_service, create_product_service, 
                        create_category_service, accept_transfer_service, initiate_transfer_service,
                        reject_transfer_service, update_product_price_service, remove_stock_service,
-                       remove_category_service)
+                       remove_category_service, create_purchase_order_service, create_supplier_service,
+                       update_supplier_service, delete_supplier_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
-                        get_product_price_history, get_organization_stock_levels, get_inventory_batches
+                        get_product_price_history, get_organization_stock_levels, get_inventory_batches,
+                        get_suppliers, get_purchase_orders
                         )
 from django.core.exceptions import PermissionDenied, ValidationError
-from .models import StockTransferLog
+from .models import StockTransferLog, Supplier
 
 from rest_framework.views import APIView
 
-from .serializers import InventoryBatchSerializer
+from django.db.models import ProtectedError
+
 
 
 
@@ -379,3 +383,123 @@ class InventoryBatchListAPIView(APIView):
         
         serializer = InventoryBatchSerializer(batches, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+class PurchaseOrderCreateApi(views.APIView):
+    permission_classes = [IsAuthenticated, HasRequiredPermission]
+
+    required_permission= 'create_purchase_order'
+
+    def post(self,request):
+
+        serializer= PurchaseOrderCreateSerializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+
+        # 3. Extract the clean, validated data
+        data = serializer.validated_data
+
+        try:
+            purchase_order= create_purchase_order_service(
+                user= request.user, 
+                branch_id=data["branch_id"], 
+                supplier_id= data["supplier_id"], 
+                items=data["purchase_items"], 
+                expected_delivery_date=data.get("expected_delivery_date"),
+                notes=data.get("notes")
+            )
+            
+            
+            
+            return Response({"message": "Purchase Order created", "product_id": purchase_order.id }, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            error_msg = e.message if hasattr(e, 'message') else str(e)
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class PurchaseOrderListApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Extract query parameters from the URL
+        branch_id = request.query_params.get('branch_id')
+        search_query = request.query_params.get('search')
+
+        # Fetch the secure list of orders via the selector
+        orders = get_purchase_orders(
+            user=request.user,
+            branch_id=branch_id,
+            search_query=search_query
+        )
+
+        # Serialize the data and return it
+        serializer = PurchaseOrderListSerializer(orders, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)  
+
+class SupplierListCreateApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        suppliers = get_suppliers(user=request.user)
+        # We can reuse the serializer for output formatting
+        data = SupplierSerializer(suppliers, many=True).data
+        return Response(data)
+
+    def post(self, request):
+        serializer = SupplierSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+
+        data=serializer.validated_data
+
+        supplier = create_supplier_service(
+            user=request.user,
+            name=data['name'],
+            email= data.get('email'),
+            phone= data.get('phone'),
+            address= data.get('address'),
+            contact_person= data.get('contact_person'),
+            bank_details= data.get('bank_details',{}),
+            current_debt= data.get('current_debt',0.00),
+            debt_limit= data.get('debt_limit',1000000.00)
+        )
+        
+        # Return the created supplier so the frontend can immediately add it to the dropdown
+        return Response(SupplierSerializer(supplier).data, status=status.HTTP_201_CREATED)
+    
+
+class SupplierDetailApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, supplier_id):
+        # partial=True allows us to only validate the fields sent in the request (e.g., just debt_limit)
+        serializer = SupplierSerializer(data=request.data, partial=True, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            supplier = update_supplier_service(
+                user=request.user,
+                supplier_id=supplier_id,
+                data=serializer.validated_data
+            )
+            return Response(SupplierSerializer(supplier).data, status=status.HTTP_200_OK)
+            
+        except Supplier.DoesNotExist:
+            return Response({"error": "Supplier not found."}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            error_msg = e.message if hasattr(e, 'message') else str(e)
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, supplier_id):
+        try:
+            delete_supplier_service(
+                user=request.user, 
+                supplier_id=supplier_id
+            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        except Supplier.DoesNotExist:
+            return Response({"error": "Supplier not found."}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            error_msg = e.message if hasattr(e, 'message') else str(e)
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
