@@ -1,7 +1,16 @@
+from decimal import Decimal
 from rest_framework import views, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import status as drf_status
 from django.core.exceptions import ValidationError
+from django.core.cache import cache
+from django.db.models import Sum, Q
+from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from .pagination import StandardResultsSetPagination
 from .selectors import (get_sales_list, get_sale_detail, get_customer_ledger, 
                         get_current_shift_data, get_shift_reports, get_shift_report_detail,
                         get_open_shift_reports)
@@ -11,16 +20,10 @@ from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer,
 
 from .services import (create_sale_service, pay_customer_debt_service, close_shift_service, 
                        create_void_request, resolve_void_request)
-from .pagination import StandardResultsSetPagination
-from rest_framework.views import APIView
 from .models import SalesOrder, ShiftReport, Payment, CustomerLedger
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from common.models import Branch
-from rest_framework import status as drf_status
-from django.db.models import Sum, Q
-from django.db.models.functions import Coalesce
-from decimal import Decimal
+
+
 
 
 
@@ -29,7 +32,30 @@ from decimal import Decimal
 class CreateSaleApi(views.APIView):
     permission_classes = [IsAuthenticated]
 
+  
+
     def post(self, request):
+        idempotency_key = request.headers.get('X-Idempotency-Key')
+
+        if not idempotency_key:
+            return Response(
+                {"error": "X-Idempotency-Key header is required to create a sale."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # 2. Create a unique cache key bound to the user
+        cache_key = f"idempotency_{request.user.id}_{idempotency_key}"
+        
+        # 3. Check if we have already processed this exact request
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            # Return the exact same response as last time, but with a 200 OK
+            return Response(
+                cached_response, 
+                status=status.HTTP_200_OK,
+                headers={"X-Cache-Lookup": "HIT - Duplicate Request Deflected"}
+            )
+        
         serializer = CreateSaleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -42,13 +68,16 @@ class CreateSaleApi(views.APIView):
                 payments=serializer.validated_data.get('payments',[]),
                 discount_amount= serializer.validated_data.get('discount_amount')
             )
-            
-            return Response({
-                "id": order.id,
+
+            response_data = {
+                "id": order.id, 
                 "total_amount": order.total_amount,
                 "status": order.payment_status,
                 "message": "Sale completed successfully."
-            }, status=status.HTTP_201_CREATED)
+            }
+            cache.set(cache_key, response_data, timeout=86400)
+            return Response(response_data, status=status.HTTP_201_CREATED)
+
 
         except ValidationError as e:
             return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)

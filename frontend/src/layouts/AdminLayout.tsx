@@ -4,9 +4,11 @@ import { Outlet, Link, useNavigate } from 'react-router-dom';
 const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   
-  // State to manage the Inventory dropdown
+  // States to manage the dropdowns
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isReportsOpen, setIsReportsOpen] = useState(false);
+  const [isSalesOpen, setIsSalesOpen] = useState(false);
+  const [isPurchasesOpen, setIsPurchasesOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -68,15 +70,15 @@ const AdminLayout: React.FC = () => {
             )}
           </div>
           {/* --- END DROPDOWN --- */}
-           {/* --- SALES DROPDOWN --- */}
+           {/* --- PURCHASES DROPDOWN --- */}
           <div className="flex flex-col">
             <button 
-              onClick={() => setIsReportsOpen(!isReportsOpen)}
+              onClick={() => setIsPurchasesOpen(!isPurchasesOpen)}
               className="w-full p-2 hover:bg-gray-800 rounded flex justify-between items-center transition-colors outline-none"
             >
-              <span className="font-medium">Sales</span>
+              <span className="font-medium">Purchases</span>
               <svg 
-                className={`w-4 h-4 transform transition-transform duration-200 ${isReportsOpen ? 'rotate-180' : ''}`} 
+                className={`w-4 h-4 transform transition-transform duration-200 ${isPurchasesOpen ? 'rotate-180' : ''}`} 
                 fill="none" 
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
@@ -86,7 +88,38 @@ const AdminLayout: React.FC = () => {
             </button>
             
             {/* Expanded Links */}
-            {isReportsOpen && (
+            {isPurchasesOpen && (
+              <div className="flex flex-col mt-1 ml-4 pl-2 border-l-2 border-gray-700 space-y-1 animate-fade-in">
+                <Link to="/admin/purchase-orders" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+               Purchase Orders
+                </Link>
+                <Link to="/admin/suppliers" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                Suppliers
+                </Link>
+                
+              </div>
+            )}
+          </div>
+          {/* --- END DROPDOWN --- */}
+           {/* --- SALES DROPDOWN --- */}
+          <div className="flex flex-col">
+            <button 
+              onClick={() => setIsSalesOpen(!isSalesOpen)}
+              className="w-full p-2 hover:bg-gray-800 rounded flex justify-between items-center transition-colors outline-none"
+            >
+              <span className="font-medium">Sales</span>
+              <svg 
+                className={`w-4 h-4 transform transition-transform duration-200 ${isSalesOpen ? 'rotate-180' : ''}`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {/* Expanded Links */}
+            {isSalesOpen && (
               <div className="flex flex-col mt-1 ml-4 pl-2 border-l-2 border-gray-700 space-y-1 animate-fade-in">
                 <Link to="/admin/sales-orders" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                Sales Orders
