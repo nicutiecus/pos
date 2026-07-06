@@ -51,6 +51,8 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
   // --- Calculations ---
   const totalPaid = paymentLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
   const balance = finalTotal - totalPaid;
+  //idempoteny
+  const idempotencyKey = crypto.randomUUID();
 
   // --- Fetch Customers ---
   useEffect(() => {
@@ -171,7 +173,7 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
     };
 
     try {
-        await api.post('/sales/create/', payload);
+        await api.post('/sales/create/', payload, {headers:{'X-Idempotency-Key': idempotencyKey}});
         alert('Payment Successful!');
         
         // --- TODO: TRIGGER RECEIPT PRINTING HERE ---

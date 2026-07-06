@@ -15,6 +15,7 @@ from datetime import timedelta
 import os
 
 import environ
+from corsheaders.defaults import default_headers
 
 env =environ.Env()
 # This line is crucial to load the file into Python's os.environ
@@ -171,6 +172,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "https://teqpos.com",
+]
+
+
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-idempotency-key",
 ]
 
 
