@@ -208,3 +208,35 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # 2. Add your domain to CSRF_TRUSTED_ORIGINS 
 # (Required in Django 4.0+ so you can actually log into the admin panel via HTTPS)
 CSRF_TRUSTED_ORIGINS = ['https://teqpos.com']
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'ERROR',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        # This specifically captures 500 errors and bad requests
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        # This acts as a catch-all for other unhandled exceptions
+        '': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+        }
+    },
+}
