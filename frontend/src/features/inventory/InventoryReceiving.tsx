@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
+import React, { useState, useEffect, type FormEvent } from 'react';
 import api from '../../api/axiosInstance';
 import { isAxiosError } from 'axios';
 
@@ -10,13 +10,6 @@ interface PurchaseOrder {
   branch_id: string;
   expected_delivery_date: string | null;
   status: string;
-}
-
-interface POItem {
-  product_id: string;
-  product_name: string;
-  expected_quantity: number;
-  agreed_unit_price: number;
 }
 
 interface ReceiveLog {
@@ -62,7 +55,6 @@ const InventoryReceiving: React.FC = () => {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      // Fetch POs that are 'Sent' or 'Partially Received' (adjust query params to match your backend)
       const [poRes, logRes] = await Promise.all([
         api.get('/inventory/purchase-orders/?status=Draft'),
         api.get('/inventory/logs?type=RECEIVE&limit=10')
@@ -94,19 +86,20 @@ const InventoryReceiving: React.FC = () => {
       setIsLoadingPO(true);
       setMessage(null);
       try {
-        // Assume your PO detail endpoint returns the PO and its nested purchase_items
         const response = await api.get(`/inventory/purchase-orders/${selectedPOId}/`);
         const poData = response.data;
         
         setSelectedPO(poData);
         
-        // Map the expected items into our receiving form state
-        const initialItems: ReceiveFormItem[] = poData.purchase_items.map((item: any) => ({
+        // Safety Fallback check for purchase_items from backend
+        const itemsList = poData.purchase_items || poData.items || [];
+        
+        const initialItems: ReceiveFormItem[] = itemsList.map((item: any) => ({
           product_id: item.product_id,
           product_name: item.product_name || `Product ID: ${item.product_id}`,
-          expected_quantity: Number(item.expected_quantity),
-          quantity_received: Number(item.expected_quantity), // Default to full receipt
-          cost_price: Number(item.agreed_unit_price), // Default to agreed price
+          expected_quantity: Number(item.expected_quantity || 0),
+          quantity_received: Number(item.expected_quantity || 0), 
+          cost_price: Number(item.agreed_unit_price || 0), 
           batch_number: '',
           expiry_date: '',
         }));
@@ -124,9 +117,16 @@ const InventoryReceiving: React.FC = () => {
   }, [selectedPOId]);
 
   // --- Handlers ---
-  const handleItemChange = (index: number, field: keyof ReceiveFormItem, value: string | number) => {
+  const handleItemChange = (index: number, field: keyof ReceiveFormItem, value: string) => {
     const updatedItems = [...receiveItems];
-    updatedItems[index] = { ...updatedItems[index], [field]: value };
+    
+    // DEBUG FIX: Explicitly handle numbers vs empty string inputs to prevent controlled state bugs
+    let sanitizedValue: string | number = value;
+    if (field === 'quantity_received' || field === 'cost_price') {
+      sanitizedValue = value === '' ? '' : Number(value);
+    }
+
+    updatedItems[index] = { ...updatedItems[index], [field]: sanitizedValue };
     setReceiveItems(updatedItems);
   };
 
@@ -150,7 +150,6 @@ const InventoryReceiving: React.FC = () => {
     setIsSubmitting(true);
     setMessage(null);
 
-    // Filter out items with 0 quantity received (in case of partial shipments)
     const itemsToReceive = receiveItems.filter(item => Number(item.quantity_received) > 0);
 
     if (itemsToReceive.length === 0) {
@@ -160,11 +159,10 @@ const InventoryReceiving: React.FC = () => {
     }
 
     try {
-      // Build payload for the receive stock service
       const payload = {
-        purchase_order_id: selectedPO.id, // Linking the receipt to the PO
-        branch_id: selectedPO.branch_id,  // Inherit branch from PO
-        amount_paid_upfront: Number(amountPaidUpfront) || 0,
+        purchase_order_id: selectedPO.id, 
+        branch_id: selectedPO.branch_id,  
+        amount_paid_upfront: amountPaidUpfront === '' ? 0 : Number(amountPaidUpfront),
         notes: notes,
         items: itemsToReceive.map(item => ({
             product_id: item.product_id,
@@ -175,12 +173,10 @@ const InventoryReceiving: React.FC = () => {
         }))
       };
 
-      // Call your backend receiving endpoint
       await api.post('/inventory/receive/', payload);
 
       setMessage({ type: 'success', text: 'Stock received and linked to Purchase Order successfully!' });
       
-      // Reset form and reload POs (in case the PO is now "Fully Received" and should disappear)
       setSelectedPOId('');
       setNotes('');
       setAmountPaidUpfront('');
@@ -203,10 +199,8 @@ const InventoryReceiving: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-8 p-4">
       
-      {/* --- LEFT COLUMN: RECEIVING FORM --- */}
       <div className="lg:col-span-3 space-y-6">
         
-        {/* Header & PO Selection */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="flex justify-between items-center mb-6">
             <div>
@@ -244,7 +238,6 @@ const InventoryReceiving: React.FC = () => {
           </div>
         </div>
 
-        {/* Dynamic Receiving Form */}
         {isLoadingPO ? (
           <div className="bg-white p-12 rounded-xl shadow-sm border border-gray-200 text-center text-gray-500 animate-pulse">
             Loading expected items for PO-{selectedPOId}...
@@ -267,13 +260,11 @@ const InventoryReceiving: React.FC = () => {
                 {receiveItems.map((item, index) => (
                   <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                     
-                    {/* Product Info */}
                     <div className="md:col-span-3">
                       <p className="text-sm font-bold text-gray-900">{item.product_name}</p>
                       <p className="text-xs text-gray-500 font-medium mt-1">Expected: <span className="text-blue-600 font-bold">{item.expected_quantity}</span></p>
                     </div>
 
-                    {/* Quantity Received */}
                     <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-500 mb-1">Act. Qty</label>
                       <input 
@@ -285,7 +276,6 @@ const InventoryReceiving: React.FC = () => {
                       />
                     </div>
 
-                    {/* Cost Price */}
                     <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-500 mb-1">Unit Cost (₦)</label>
                       <input 
@@ -297,7 +287,6 @@ const InventoryReceiving: React.FC = () => {
                       />
                     </div>
 
-                    {/* Batch Number */}
                     <div className="md:col-span-3">
                       <label className="block text-xs font-bold text-gray-500 mb-1">Batch #</label>
                       <input 
@@ -309,7 +298,6 @@ const InventoryReceiving: React.FC = () => {
                       />
                     </div>
 
-                    {/* Expiry Date */}
                     <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-500 mb-1">Expiry</label>
                       <input 
@@ -324,8 +312,8 @@ const InventoryReceiving: React.FC = () => {
                 ))}
               </div>
 
-            <div className="pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
+              <div className="pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Amount Paid Upfront (₦)</label>
                   <input 
                     type="number" 
@@ -339,18 +327,17 @@ const InventoryReceiving: React.FC = () => {
                   <p className="text-xs text-gray-500 mt-1 font-medium">Leave blank if this is entirely on credit.</p>
                 </div>
 
-              {/* Delivery Notes */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Delivery Notes / Waybill Ref</label>
-                <input 
-                  type="text" 
-                  value={notes} 
-                  onChange={(e) => setNotes(e.target.value)} 
-                  placeholder="e.g. Delivered by Van 2, Waybill #12345"
-                  className="w-full rounded-lg border-gray-300 shadow-sm p-3 border focus:ring-blue-500" 
-                />
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Delivery Notes / Waybill Ref</label>
+                  <input 
+                    type="text" 
+                    value={notes} 
+                    onChange={(e) => setNotes(e.target.value)} 
+                    placeholder="e.g. Delivered by Van 2, Waybill #12345"
+                    className="w-full rounded-lg border-gray-300 shadow-sm p-3 border focus:ring-blue-500" 
+                  />
+                </div>
               </div>
-            </div>
 
               <div className="flex justify-end pt-4">
                 <button 
@@ -366,7 +353,6 @@ const InventoryReceiving: React.FC = () => {
         )}
       </div>
 
-      {/* --- RIGHT COLUMN: RECENT ACTIVITY --- */}
       <div className="space-y-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden sticky top-6">
           <div className="p-4 bg-gray-50 border-b border-gray-200">
