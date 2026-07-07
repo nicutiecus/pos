@@ -6,7 +6,7 @@ from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            CategorySerializer, InventoryLogSerializer, UpdateProductPriceSerializer,
                            StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer,
                            RemoveStockSerializer, PurchaseOrderCreateSerializer, InventoryBatchSerializer,
-                           SupplierSerializer, PurchaseOrderListSerializer)
+                           SupplierSerializer, PurchaseOrderListSerializer, PurchaseOrderDetailSerializer)
 from .services import (receive_stock_service, create_product_service, 
                        create_category_service, accept_transfer_service, initiate_transfer_service,
                        reject_transfer_service, update_product_price_service, remove_stock_service,
@@ -18,7 +18,7 @@ from .selectors import (get_stock_levels, get_expiring_batches, get_categories,
                         get_suppliers, get_purchase_orders
                         )
 from django.core.exceptions import PermissionDenied, ValidationError
-from .models import StockTransferLog, Supplier
+from .models import StockTransferLog, Supplier, PurchaseOrder
 
 from rest_framework.views import APIView
 
@@ -35,17 +35,27 @@ class StockReceiveApi(views.APIView):
     def post(self, request):
         serializer = StockReceiveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
         try:
+            po = PurchaseOrder.objects.get(
+                id=data['purchase_order_id'], 
+                tenant=request.user.tenant
+            )
+            print(f"DEBUG: PO Supplier ID is: {po.supplier_id}")
             receive_stock_service(
                 user=request.user,
-                branch_id=serializer.validated_data['branch_id'],
-                items=serializer.validated_data['items'],
-                notes=serializer.validated_data.get('notes', '')
+                purchase_order_id=data['purchase_order_id'],
+                branch_id=data['branch_id'],
+                supplier_id= po.supplier_id,
+                items=data['items'],
+                amount_paid_upfront=data.get('amount_paid_upfront'),
+                notes=data.get('notes', '')
             )
             return Response({"message": "Stock received successfully."}, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            error_msg = e.message if hasattr(e, 'message') else str(e)
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
 
 class StockLevelApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -425,12 +435,14 @@ class PurchaseOrderListApi(views.APIView):
         # Extract query parameters from the URL
         branch_id = request.query_params.get('branch_id')
         search_query = request.query_params.get('search')
+        status_filter = request.query_params.get('status') # <-
 
         # Fetch the secure list of orders via the selector
         orders = get_purchase_orders(
             user=request.user,
             branch_id=branch_id,
-            search_query=search_query
+            search_query=search_query,
+            status= status_filter
         )
 
         # Serialize the data and return it
@@ -460,8 +472,7 @@ class SupplierListCreateApi(views.APIView):
             address= data.get('address'),
             contact_person= data.get('contact_person'),
             bank_details= data.get('bank_details',{}),
-            current_debt= data.get('current_debt',0.00),
-            debt_limit= data.get('debt_limit',1000000.00)
+            current_debt= data.get('current_debt',0.00)
         )
         
         # Return the created supplier so the frontend can immediately add it to the dropdown
@@ -503,3 +514,32 @@ class SupplierDetailApi(views.APIView):
         except ValidationError as e:
             error_msg = e.message if hasattr(e, 'message') else str(e)
             return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class PurchaseOrderDetailApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, po_id):
+        try:
+            # We use select_related and prefetch_related to optimize the database query 
+            # and prevent the "N+1 query problem" when fetching nested items.
+            po = PurchaseOrder.objects.select_related('supplier', 'branch').prefetch_related('items__product').get(
+                id=po_id, 
+                tenant=request.user.tenant
+            )
+
+            # 🔒 Security: If the user is a manager, ensure this PO belongs to their branch
+            if request.user.role not in ['Admin', 'Tenant_Admin', 'Super_Admin']:
+                if po.branch_id != request.user.branch_id:
+                    return Response(
+                        {"error": "Unauthorized access to this branch's Purchase Order."}, 
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+            # Serialize and return
+            serializer = PurchaseOrderDetailSerializer(po)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except PurchaseOrder.DoesNotExist:
+            return Response({"error": "Purchase order not found."}, status=status.HTTP_404_NOT_FOUND)

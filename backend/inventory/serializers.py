@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import (Product, Category, InventoryBatch, StockTransferLog, ProductPriceHistory, 
                      InventoryLog, Supplier, PurchaseOrder)
+from .models import PurchaseOrder, PurchaseOrderItem  # Import your item model!
 
 
 class StockReceiveItemSerializer(serializers.Serializer):
@@ -16,9 +17,11 @@ class StockReceiveSerializer(serializers.Serializer):
     """
     Accepts a list of items to receive into a specific branch.
     """
+    purchase_order_id = serializers.CharField()
     branch_id = serializers.UUIDField()
     items = StockReceiveItemSerializer(many=True)
     notes = serializers.CharField(required=False, allow_blank=True)
+    amount_paid_upfront = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, default=0.00)
 
 
 
@@ -231,7 +234,7 @@ class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
         fields = ['id', 'name','email', 'phone', 'address', 'contact_person', 'bank_details',
-                 'tax_identification_number', 'current_debt','debt_limit']
+                 'tax_identification_number', 'current_debt']
         read_only_fields = ['id']
 
     def validate_name(self, value):
@@ -240,4 +243,38 @@ class SupplierSerializer(serializers.ModelSerializer):
         if Supplier.objects.filter(name__iexact=value, tenant=user.tenant).exists():
             raise serializers.ValidationError("A supplier with this name already exists.")
         return value
+
+
+
+
+class PurchaseOrderItemDetailSerializer(serializers.ModelSerializer):
+    # Get the actual string name of the product
+    product_name = serializers.CharField(source='product.name', read_only=True)
+
+    class Meta:
+        model = PurchaseOrderItem
+        # Ensure these match your frontend expectations
+        fields = ['product_id', 'product_name', 'expected_quantity', 'agreed_unit_price','subtotal']
+
+
+class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
     
+    # NESTED SERIALIZER: Grab the items! 
+    # Note: Change 'items' to whatever your related_name is on the PurchaseOrder model. 
+    # (If you didn't set a related_name, it defaults to 'purchaseorderitem_set')
+    purchase_items = PurchaseOrderItemDetailSerializer(source='items', many=True, read_only=True) 
+
+    class Meta:
+        model = PurchaseOrder
+        fields = [
+            'id', 
+            'supplier_name', 
+            'branch_name', 
+            'branch_id', 
+            'expected_delivery_date', 
+            'status', 
+            'purchase_items',
+            'total_estimated_amount'
+        ]

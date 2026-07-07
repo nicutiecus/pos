@@ -11,7 +11,7 @@ interface Supplier {
   address: string | null;
   contact_person: string | null;
   current_debt: string | number;
-  debt_limit: string | number;
+
 }
 
 const Suppliers: React.FC = () => {
@@ -23,9 +23,7 @@ const Suppliers: React.FC = () => {
 
   // Modal States
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [editLimitSupplier, setEditLimitSupplier] = useState<Supplier | null>(null);
   const [editContactPerson, setEditContactPerson] = useState<Supplier | null>(null);
-  const [newLimit, setNewLimit] = useState<string>('');
   const [newContact, setNewContact] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -36,8 +34,7 @@ const Suppliers: React.FC = () => {
     phone: '',
     email: '',
     address: '',
-    tax_identification_number: '',
-    debt_limit: '1000000', // Default 1M
+    tax_identification_number: ''
   });
 
   // --- Fetch Data ---
@@ -77,7 +74,7 @@ const Suppliers: React.FC = () => {
       await api.post('/inventory/suppliers/', formData);
       setMessage({ type: 'success', text: 'Supplier added successfully!' });
       setIsCreateOpen(false);
-      setFormData({ name: '', contact_person: '', phone: '', email: '', address: '', tax_identification_number: '', debt_limit: '1000000' });
+      setFormData({ name: '', contact_person: '', phone: '', email: '', address: '', tax_identification_number: '' });
       fetchSuppliers();
     } catch (err) {
       if (isAxiosError(err)) {
@@ -100,24 +97,6 @@ const Suppliers: React.FC = () => {
     }
   };
 
-  const handleEditLimitSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!editLimitSupplier) return;
-    
-    setIsSubmitting(true);
-    try {
-      await api.patch(`/inventory/suppliers/${editLimitSupplier.id}/`, {
-        debt_limit: newLimit
-      });
-      setMessage({ type: 'success', text: 'Debt limit updated.' });
-      setEditLimitSupplier(null);
-      fetchSuppliers();
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Failed to update debt limit.' });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleContactPersonSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -191,15 +170,15 @@ const Suppliers: React.FC = () => {
                 <tr>
                   <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Details</th>
                   <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Contact Person</th>
-                  <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Debt Limit</th>
                   <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Current Debt</th>
                   <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {suppliers.map((supplier) => {
-                  const debtRatio = Number(supplier.current_debt) / Number(supplier.debt_limit);
+                  {/*const debtRatio = Number(supplier.current_debt) / Number(supplier.debt_limit);
                   const isNearingLimit = debtRatio > 0.8; // 80% used
+                  // */}
 
                   return (
                     <tr key={supplier.id} className="hover:bg-blue-50/50 transition-colors">
@@ -216,6 +195,7 @@ const Suppliers: React.FC = () => {
                            ✏️
                         </button>
                       </td>
+                      {/*
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                         ₦{Number(supplier.debt_limit).toLocaleString()}
                         <button 
@@ -225,12 +205,15 @@ const Suppliers: React.FC = () => {
                            ✏️
                         </button>
                       </td>
+                      */}
+                      {/*
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-right">
                         <span className={isNearingLimit ? 'text-red-600' : 'text-gray-900'}>
                           ₦{Number(supplier.current_debt).toLocaleString()}
                         </span>
                         {isNearingLimit && <div className="text-[10px] text-red-500 font-bold uppercase mt-1">Near Limit!</div>}
                       </td>
+                      */}
                       <td className="px-6 py-4 whitespace-nowrap text-center space-x-3">
                         <button onClick={() => handleDelete(supplier.id, supplier.name)} className="text-red-500 hover:text-red-700 text-sm font-medium" title="Remove Supplier">
                           Delete
@@ -280,10 +263,7 @@ const Suppliers: React.FC = () => {
                   <label className="block text-xs font-bold text-gray-700 mb-1">Email</label>
                   <input type="email" name="email" value={formData.email} onChange={handleCreateChange} className="w-full rounded border-gray-300 p-2 border text-sm" />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Debt Limit (₦)</label>
-                  <input type="number" name="debt_limit" value={formData.debt_limit} onChange={handleCreateChange} min="0" step="0.01" className="w-full rounded border-gray-300 p-2 border text-sm" />
-                </div>
+                
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -313,35 +293,7 @@ const Suppliers: React.FC = () => {
         </div>
       )}
 
-      {/* --- EDIT DEBT LIMIT MODAL --- */}
-      {editLimitSupplier && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-lg font-black text-gray-800">Edit Debt Limit</h2>
-              <button onClick={() => setEditLimitSupplier(null)} className="text-gray-400 hover:text-red-500 font-bold text-xl">&times;</button>
-            </div>
-            <form onSubmit={handleEditLimitSubmit} className="p-6 space-y-4">
-                {message && message.type === 'error' && (
-                <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded text-sm font-medium">
-                  {message.text}
-                </div>
-              )}
-              <p className="text-sm text-gray-600">Update the maximum allowable credit for <strong>{editLimitSupplier.name}</strong>.</p>
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">New Limit (₦)</label>
-                <input type="number" value={newLimit} onChange={(e) => setNewLimit(e.target.value)} min="0" step="0.01" required className="w-full rounded border-gray-300 p-2 border text-lg font-bold" />
-              </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                <button type="button" onClick={() => {setEditLimitSupplier(null); setMessage(null)}} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 disabled:opacity-50">
-                  {isSubmitting ? 'Updating...' : 'Confirm'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      
 
        {/* --- EDIT Contact Person MODAL --- */}
       {editContactPerson && (

@@ -25,3 +25,5 @@ def get_expenses(*, user, branch_id=None, scope=None, start_date=None, end_date=
         qs = qs.filter(expense_date__lte=end_date)
 
     return qs
+
+

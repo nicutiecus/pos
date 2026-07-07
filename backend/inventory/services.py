@@ -182,18 +182,38 @@ def receive_stock_service(
             
         invoice.save()
 
+        if invoice.payment_status in [PurchaseInvoice.PaymentStatus.PENDING, PurchaseInvoice.PaymentStatus.PARTIAL]:
+            
+            # Fetch the supplier's most recent balance, locking the row for concurrency
+            last_ledger_entry = SupplierLedger.objects.select_for_update().filter(
+                supplier=supplier, 
+                tenant=user.tenant
+            ).order_by('-created_at', '-id').first()
+            
+            current_balance = last_ledger_entry.balance_after if last_ledger_entry else Decimal('0.00')
+
+            debt_incurred = total_invoice_amount - amount_paid_upfront
+
+            # The BILL represents the total value of the goods received.
+            # (If a partial payment was already logged earlier, this bill offsets it to calculate the true remaining debt).
+            balance_after_bill = current_balance + debt_incurred
+
         # 5. Update Supplier Ledger (Accounts Payable)
         # Create a BILL entry for the total cost of the goods received
-        SupplierLedger.objects.create(
-            tenant=user.tenant,
-            supplier=supplier,
-            branch=branch,
-            transaction_type='BILL', # Or 'PURCHASE' based on your TextChoices
-            amount=total_invoice_amount,
-            reference_id=invoice.id,
-            notes=f"Stock received on Invoice {invoice.id}"
-        )
+            SupplierLedger.objects.create(
+                tenant=user.tenant,
+                supplier=supplier,
+                branch=branch,
+                transaction_type='Purchase', # Or 'PURCHASE' based on your TextChoices
+                amount=debt_incurred,
+                balance_after=balance_after_bill,
+                reference_id=invoice.id,
+                notes=f"Stock received on Invoice {invoice.id}"
+            )
 
+            supplier.current_debt = balance_after_bill
+            supplier.save(update_fields=['current_debt'])
+        """
         # If money was paid immediately, log the payment to reduce the debt
         if amount_paid_upfront > 0:
             SupplierLedger.objects.create(
@@ -205,6 +225,8 @@ def receive_stock_service(
                 reference_id=invoice.id,
                 notes=f"Upfront payment for Invoice {invoice.id}"
             )
+
+        """
 
         # 6. Update Purchase Order Status (if applicable)
         if po:
@@ -518,8 +540,7 @@ def create_supplier_service(*, user, name: str, email: str, phone, address, cont
         contact_person= contact_person,
         bank_details= bank_details,
         tax_identification_number= tax_identification_number,
-        current_debt = current_debt,
-        debt_limit= debt_limit
+        current_debt = current_debt
     )
     return supplier
 

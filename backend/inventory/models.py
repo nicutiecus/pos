@@ -172,7 +172,7 @@ def generate_purchase_id():
 def generate_receipt_id():
     # Uses a custom alphabet (No 0, O, 1, I, or lowercase letters)
     # Generates an 8-character string like "3K9XN2PA"
-    return generate('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 8)
+    return generate('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 6)
 
 def generate_supplier_id():
     return generate('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 6)
@@ -196,7 +196,6 @@ class Supplier(TenantAwareModel):
     bank_details = models.JSONField(default=dict, blank=True)  
     # For compliance
     tax_identification_number = models.CharField(max_length=50, null=True, blank=True)
-    debt_limit = models.DecimalField(max_digits=12, decimal_places=2, default=1000000.00)
     current_debt = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     class Meta:
@@ -209,8 +208,8 @@ class SupplierLedger(TenantAwareModel):
     Double-entry bookkeeping for supplier debt.
     """
     class TransactionType(models.TextChoices):
-        SALE = 'Sale', _('Sale')
-        PAYMENT = 'Payment', _('Payment')
+        PURCHASE = 'Purchase', _('Purchase')
+        REPAYMENT = 'Repayment', _('Repayment')
         RETURN = 'Return', _('Return')
 
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='ledger_entries')
@@ -246,7 +245,7 @@ class PurchaseOrder(TenantAwareModel):
         RECEIVED = 'Fully Received', _('Fully Received')
         CANCELED = 'Canceled', _('Canceled')
 
-    id = models.CharField(primary_key=True, max_length=8, default=generate_purchase_id, editable=False)
+    id = models.CharField(primary_key=True, max_length=12, default=generate_purchase_id, editable=False)
     branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT, related_name='purchase_orders')
     supplier = models.ForeignKey('inventory.Supplier', on_delete=models.PROTECT, related_name='purchase_orders')
     ordered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='placed_orders')
@@ -319,3 +318,4 @@ class PurchaseInvoiceItem(models.Model):
 
     class Meta:
         db_table = 'purchase_invoice_items'
+

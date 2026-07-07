@@ -249,7 +249,7 @@ def get_suppliers(*, user):
 
     return query.order_by('created_at')
 
-def get_purchase_orders(*, user, branch_id, search_query=None):
+def get_purchase_orders(*, user, branch_id, search_query=None, status=None):
 
     qs = PurchaseOrder.objects.filter(tenant=user.tenant).select_related(
         'supplier','branch','ordered_by'
@@ -260,7 +260,13 @@ def get_purchase_orders(*, user, branch_id, search_query=None):
     elif branch_id:
         # If Admin explicitly filters by a branch
         qs = qs.filter(branch_id=branch_id)
-
+    if status:
+        # If multiple statuses are passed (e.g., 'Draft,Sent'), split them into a list
+        if ',' in status:
+            status_list = status.split(',')
+            qs = qs.filter(status__in=status_list)
+        else:
+            qs = qs.filter(status=status)
     # 🔍 Search Functionality
     if search_query:
         qs = qs.filter(
