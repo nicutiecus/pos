@@ -206,14 +206,13 @@ const Suppliers: React.FC = () => {
                         </button>
                       </td>
                       */}
-                      {/*
+                      
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-right">
-                        <span className={isNearingLimit ? 'text-red-600' : 'text-gray-900'}>
+                        <span className={'text-gray-900'}>
                           ₦{Number(supplier.current_debt).toLocaleString()}
                         </span>
-                        {isNearingLimit && <div className="text-[10px] text-red-500 font-bold uppercase mt-1">Near Limit!</div>}
                       </td>
-                      */}
+                    
                       <td className="px-6 py-4 whitespace-nowrap text-center space-x-3">
                         <button onClick={() => handleDelete(supplier.id, supplier.name)} className="text-red-500 hover:text-red-700 text-sm font-medium" title="Remove Supplier">
                           Delete
