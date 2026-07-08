@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='purchaseorder',
             name='id',
-            field=models.CharField(default=inventory.models.generate_purchase_id, editable=False, max_length=8, primary_key=True, serialize=False),
+            field=models.CharField(default=inventory.models.generate_receipt_id, editable=False, max_length=8, primary_key=True, serialize=False),
         ),
         migrations.AlterField(
             model_name='supplierledger',

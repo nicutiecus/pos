@@ -161,7 +161,7 @@ const PurchaseOrders: React.FC = () => {
                     onClick={() => handleRowClick(po.id)}
                     className="hover:bg-blue-50/50 transition-colors cursor-pointer"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">{po.id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">{"PO-"+po.id}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.supplier_name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{po.branch_name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

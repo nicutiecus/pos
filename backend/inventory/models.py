@@ -161,14 +161,6 @@ class ProductPriceHistory(TenantAwareModel):
         return f"{self.product.name}: {self.old_price} -> {self.new_price}"
 
 
-# 1. Add the generator function at the top of your file
-def generate_purchase_id():
-    # Uses a custom alphabet (No 0, O, 1, I, or lowercase letters)
-    # Generates an 8-character string like "3K9XN2PA"
-    id=generate('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 8)
-    purchase_id=f"PO-{id}"
-    return purchase_id
-
 def generate_receipt_id():
     # Uses a custom alphabet (No 0, O, 1, I, or lowercase letters)
     # Generates an 8-character string like "3K9XN2PA"
@@ -245,7 +237,7 @@ class PurchaseOrder(TenantAwareModel):
         RECEIVED = 'Fully Received', _('Fully Received')
         CANCELED = 'Canceled', _('Canceled')
 
-    id = models.CharField(primary_key=True, max_length=12, default=generate_purchase_id, editable=False)
+    id = models.CharField(primary_key=True, max_length=12, default=generate_receipt_id, editable=False)
     branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT, related_name='purchase_orders')
     supplier = models.ForeignKey('inventory.Supplier', on_delete=models.PROTECT, related_name='purchase_orders')
     ordered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='placed_orders')
