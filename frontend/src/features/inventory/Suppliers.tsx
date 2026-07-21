@@ -11,11 +11,22 @@ interface Supplier {
   address: string | null;
   contact_person: string | null;
   current_debt: string | number;
+  branch_specific_debt: string;
 
+}
+
+
+interface Branch{
+    id: string | number,
+    name: string
 }
 
 const Suppliers: React.FC = () => {
   // --- State ---
+  const userRole = localStorage.getItem('userRole');
+  //const branchId = localStorage.getItem('branchId');
+  const isAdmin = userRole === 'Tenant_Admin' || userRole === 'ADMIN' || userRole=== 'Super_Admin';
+
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -36,8 +47,44 @@ const Suppliers: React.FC = () => {
     address: '',
     tax_identification_number: ''
   });
-
+  // 3. Debt Repayment
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentSupplier, setPaymentSupplier] = useState<Supplier | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const branchId = localStorage.getItem('branchId');
+  const [creditPaymentForm, setCreditPaymentForm] = useState({
+        amount: '',
+        method: 'Cash',
+        notes: 'Credit repayment',
+        branch_id: branchId,
+    
+    });
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false)
   // --- Fetch Data ---
+
+
+  useEffect(() => {
+    // Only fetch branches if the user is an Admin and has no assigned branchId
+    if (isAdmin && !branchId) {
+        const fetchBranches = async () => {
+            setIsLoadingBranches(true);
+            try {
+                // Replace '/api/branches/' with your actual endpoint route
+                const res = await api.get('/branches'); 
+                
+                // Adjust this if your API wraps the array (e.g., res.data.results)
+                setBranches(res.data); 
+            } catch (error) {
+                console.error("Failed to fetch branches:", error);
+            } finally {
+                setIsLoadingBranches(false);
+            }
+        };
+
+        fetchBranches();
+    }
+}, [isAdmin, branchId]);
   const fetchSuppliers = async () => {
     setIsLoading(true);
     try {
@@ -61,6 +108,55 @@ const Suppliers: React.FC = () => {
   }, [searchQuery]);
 
   // --- Handlers ---
+  const handleOpenPayment = (supplier: Supplier) => {
+      setPaymentSupplier(supplier);
+      // Auto-fill the amount with their total debt for convenience
+      const relevantDebt =  supplier.current_debt ;
+      setCreditPaymentForm({
+          amount: relevantDebt.toString(),
+          method: 'Cash',
+          notes: 'Debt repayment',
+          branch_id: branchId,
+  
+      });
+      setIsPaymentModalOpen(true);
+  };
+
+  const handleProcessPayment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!paymentSupplier)
+          return
+        if (!creditPaymentForm.branch_id) {
+          alert("Error: Branch ID is required to process this payment.");
+          return;
+      }
+  
+        setIsProcessingPayment(true);
+        try {
+            const payload = {
+                branch_id: creditPaymentForm.branch_id,
+                amount: Number(creditPaymentForm.amount),
+                method: creditPaymentForm.method,
+                notes: creditPaymentForm.notes,
+            };
+  
+            // NOTE: Adjust this URL to match your exact Django endpoint path
+            const res = await api.post(`/inventory/suppliers/${paymentSupplier.id}/accounts-payable/`, payload);
+            
+            const data = res.data; // The JSON response you provided
+  
+            alert(`✅ ${data.message}\n\nAmount Paid: ₦${Number(data.amount).toLocaleString()}\nNew Balance: ₦${Number(data.new_balance).toLocaleString()}\nReceipt #: ${data.receipt_no}`);
+            
+            setIsPaymentModalOpen(false);
+            await fetchSuppliers(); // Refresh the list to show new debt balance
+            
+        } catch (err: any) {
+            alert(`Payment failed: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setIsProcessingPayment(false);
+        }
+    };
+
   const handleCreateChange = (e: ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -214,6 +310,12 @@ const Suppliers: React.FC = () => {
                       </td>
                     
                       <td className="px-6 py-4 whitespace-nowrap text-center space-x-3">
+                         <button 
+                                                onClick={() => handleOpenPayment(supplier)} 
+                                                className="text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded shadow-sm transition-colors"
+                                            >
+                                                💳 Pay
+                                            </button>
                         <button onClick={() => handleDelete(supplier.id, supplier.name)} className="text-red-500 hover:text-red-700 text-sm font-medium" title="Remove Supplier">
                           Delete
                         </button>
@@ -323,6 +425,101 @@ const Suppliers: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Supplier Payment Modal */}
+      {isPaymentModalOpen && paymentSupplier && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-down">
+                  <div className="bg-green-50 p-5 border-b border-green-100 flex justify-between items-start">
+                      <div>
+                          <h3 className="font-bold text-lg text-green-900">Process Supplier Payment</h3>
+                          <p className="text-sm text-green-700">For {paymentSupplier.name}</p>
+                      </div>
+                      <button onClick={() => setIsPaymentModalOpen(false)} className="text-green-600 hover:text-red-500 text-xl leading-none">&times;</button>
+                  </div>
+                  
+                  <div className="p-5 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                      <span className="text-sm font-bold text-gray-500 uppercase">{isAdmin? 'Total Owed:' : 'Branch Debt Owed:'}</span>
+                      <span className="text-xl font-extrabold text-red-600">₦{Number(paymentSupplier.current_debt).toLocaleString()}</span>
+                  </div>
+
+                  <form onSubmit={handleProcessPayment} className="p-5 space-y-4">
+                       {(!branchId && isAdmin) && (
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Branch <span className="text-red-500">*</span>
+                            </label>
+                            <select 
+                                required 
+                                value ={creditPaymentForm.branch_id || ''} 
+                                onChange={e => setCreditPaymentForm({...creditPaymentForm, branch_id: e.target.value})}
+                                className="w-full border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none bg-blue-50" 
+                                disabled={isLoadingBranches}
+                            >
+                                <option value="" disabled>Select a branch</option>
+                                {branches.map(branch => (
+                                    <option key={branch.id} value={branch.id}>
+                                        {branch.name}
+                                    </option>
+                                ))}
+                            </select>
+                            
+                            {/* Loading state indicator */}
+                            {isLoadingBranches ? (
+                                <p className="text-xs text-blue-500 mt-1 animate-pulse">Loading branches...</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 mt-1">Required for Admins processing payments.</p>
+                            )}
+                        </div>
+                    )}
+                      <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Payment Amount (₦)</label>
+                          <input 
+                              type="number" 
+                              required 
+                              min="1"
+                              max={isAdmin? paymentSupplier.current_debt: paymentSupplier.branch_specific_debt} // Prevent overpaying in this specific modal
+                              value={creditPaymentForm.amount} 
+                              onChange={e => setCreditPaymentForm({...creditPaymentForm, amount: e.target.value})}
+                              className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-lg font-bold text-gray-900" 
+                          />
+                      </div>
+                      
+                      <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Payment Method</label>
+                          <select 
+                              value={creditPaymentForm.method} 
+                              onChange={e => setCreditPaymentForm({...creditPaymentForm, method: e.target.value})}
+                              className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                          >
+                              <option value="Cash">Cash</option>
+                              <option value="Transfer">Bank Transfer</option>
+                              <option value="POS">POS / Card</option>
+                          </select>
+                      </div>
+
+                      <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Notes (Optional)</label>
+                          <input 
+                              type="text" 
+                              value={creditPaymentForm.notes} 
+                              onChange={e => setCreditPaymentForm({...creditPaymentForm, notes: e.target.value})}
+                              className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm" 
+                              placeholder="e.g. Paid via GTBank transfer"
+                          />
+                      </div>
+                      
+                      <div className="pt-4 flex justify-end space-x-3">
+                          <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancel</button>
+                          <button type="submit" disabled={isProcessingPayment || !creditPaymentForm.amount} className="px-5 py-2.5 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 transition-colors shadow-md">
+                              {isProcessingPayment ? 'Processing...' : 'Confirm Payment'}
+                          </button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
+      
 
     </div>
   );

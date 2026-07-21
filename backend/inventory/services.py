@@ -3,13 +3,17 @@ from django.core.exceptions import ValidationError
 from common.models import Branch
 from .models import (Product, InventoryBatch, Category,
                       StockTransferLog, ProductPriceHistory, InventoryLog, Supplier, 
-                      PurchaseOrder, PurchaseOrderItem, PurchaseInvoice, PurchaseInvoiceItem, SupplierLedger )
-from decimal import Decimal
+                      PurchaseOrder, PurchaseOrderItem, PurchaseInvoice, PurchaseInvoiceItem, SupplierLedger,
+                       SupplierPayment )
+from decimal import Decimal, InvalidOperation
 import random
 import string
 from django.db.models import ProtectedError
 
-
+def generate_receipt_ref(transaction_type):
+    """Generates a short, unique reference like PAY-8X92B"""
+    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    return f"{transaction_type}-{suffix}"
 
 def create_purchase_order_service(
     *, 
@@ -92,6 +96,7 @@ def receive_stock_service(
     items: list, 
     purchase_order_id: str = None, # NEW: Optional link to a PO
     amount_paid_upfront: Decimal = Decimal('0.00'), # NEW: If cash was handed to the driver
+    payment_method: str=None,
     notes: str = ""
 ) -> PurchaseInvoice:
     """
@@ -105,6 +110,9 @@ def receive_stock_service(
     if not branch or not supplier:
         raise ValidationError("Invalid branch or supplier.")
 
+    if amount_paid_upfront > 0 and not payment_method:
+        raise ValidationError("Payment method is required if an upfront payment is made.")
+    
     po = None
     if purchase_order_id:
         po = PurchaseOrder.objects.filter(id=purchase_order_id, tenant=user.tenant).first()
@@ -182,53 +190,51 @@ def receive_stock_service(
             
         invoice.save()
 
-        if invoice.payment_status in [PurchaseInvoice.PaymentStatus.PENDING, PurchaseInvoice.PaymentStatus.PARTIAL]:
-            
-            # Fetch the supplier's most recent balance, locking the row for concurrency
-            last_ledger_entry = SupplierLedger.objects.select_for_update().filter(
+        debt_incurred = total_invoice_amount - amount_paid_upfront
+
+        # Fetch the supplier's most recent balance, locking the row for concurrency
+        last_ledger_entry = SupplierLedger.objects.select_for_update().filter(
                 supplier=supplier, 
                 tenant=user.tenant
             ).order_by('-created_at', '-id').first()
             
-            current_balance = last_ledger_entry.balance_after if last_ledger_entry else Decimal('0.00')
+        current_balance = last_ledger_entry.balance_after if last_ledger_entry else Decimal('0.00')
+        final_debt_balance = current_balance
 
-            debt_incurred = total_invoice_amount - amount_paid_upfront
-
-            # The BILL represents the total value of the goods received.
-            # (If a partial payment was already logged earlier, this bill offsets it to calculate the true remaining debt).
-            balance_after_bill = current_balance + debt_incurred
+        if debt_incurred > 0:
 
         # 5. Update Supplier Ledger (Accounts Payable)
         # Create a BILL entry for the total cost of the goods received
             SupplierLedger.objects.create(
-                tenant=user.tenant,
-                supplier=supplier,
-                branch=branch,
-                transaction_type='Purchase', # Or 'PURCHASE' based on your TextChoices
-                amount=debt_incurred,
-                balance_after=balance_after_bill,
-                reference_id=invoice.id,
-                notes=f"Stock received on Invoice {invoice.id}"
-            )
+                    tenant=user.tenant,
+                    supplier=supplier,
+                    branch=branch,
+                    transaction_type='Purchase',
+                    amount=total_invoice_amount,
+                    balance_after=final_debt_balance,
+                    reference_id=invoice.id,
+                    notes=f"Stock received on Invoice {invoice.id}"
+                )
+            supplier.current_debt = final_debt_balance
+            supplier.save(update_fields='current_debt')
+                
 
-            supplier.current_debt = balance_after_bill
-            supplier.save(update_fields=['current_debt'])
-        """
         # If money was paid immediately, log the payment to reduce the debt
         if amount_paid_upfront > 0:
-            SupplierLedger.objects.create(
+            SupplierPayment.objects.create(
                 tenant=user.tenant,
+                invoive= invoice,
                 supplier=supplier,
                 branch=branch,
-                transaction_type='PAYMENT',
+                transaction_type='Purchase',
+                method= payment_method,
                 amount=amount_paid_upfront,
-                reference_id=invoice.id,
-                notes=f"Upfront payment for Invoice {invoice.id}"
+                reference_code=f"PAY-{invoice.id}",
             )
 
-        """
+    
 
-        # 6. Update Purchase Order Status (if applicable)
+        #  Update Purchase Order Status (if applicable)
         if po:
             # You could add logic here to check if partial or full, but for now:
             po.status = PurchaseOrder.OrderStatus.RECEIVED
@@ -587,3 +593,70 @@ def delete_supplier_service(*, user, supplier_id: str):
             "Cannot delete this supplier because they are linked to existing purchase orders. "
             "Consider renaming them to 'DO NOT USE - [Name]' instead."
         )
+    
+
+
+def pay_supplier_credit_service(
+    *, 
+    user, 
+    supplier_id: str, 
+    branch_id: str, 
+    amount: float, 
+    method: str,
+    processed_by: str, 
+    notes: str = ""
+):
+    try:
+        amount = Decimal(str(amount))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValidationError({"amount": "Please provide a valid decimal number."})
+    branch = Branch.objects.filter(id=branch_id, tenant=user.tenant).first()
+    if not branch:
+        raise ValidationError("Invalid branch.")
+
+    with transaction.atomic():
+        try:
+            supplier = Supplier.objects.select_for_update().get(id=supplier_id, tenant=user.tenant)
+        except Supplier.DoesNotExist:
+            raise ValidationError("Supplier not found.")
+
+        if amount <= Decimal(0.0):
+            raise ValidationError("Payment amount must be greater than zero.")
+            
+        if amount > supplier.current_debt:
+            raise ValidationError(f"Amount exceeds debt. Outstanding: {Supplier.current_debt}")
+
+        # 1. Update Debt
+        supplier.current_debt -= amount
+        supplier.save()
+
+        # 2. Generate Invoice Number
+        payment_reference = generate_receipt_ref("DEBT")
+
+        # 3. Create Ledger Entry
+        ledger = SupplierLedger.objects.create(
+            tenant=user.tenant,
+            branch=branch,
+            supplier=supplier,
+            transaction_type=SupplierLedger.TransactionType.CREDIT_PAYMENT,
+            amount=amount,
+            balance_after=supplier.current_debt,
+            
+            # ✅ STORE THE INVOICE NUMBER HERE
+            reference_id=payment_reference,
+            processed_by = processed_by,
+            
+            notes=notes or f"Debt payment via {method}"
+        )
+        SupplierPayment.objects.create(
+            tenant=user.tenant,
+            branch=branch,
+            supplier=supplier, # Notice no 'invoice' is passed here!
+            processed_by=user,
+            transaction_type='Debt Payment',
+            method=method,
+            amount=amount,
+            reference_code=payment_reference
+        )
+
+        return ledger

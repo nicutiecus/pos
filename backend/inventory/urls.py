@@ -4,7 +4,8 @@ from .apis import (StockReceiveApi, StockLevelApi, InventoryLogListApi,
                    StockTransferApi, StockTransferLogListApi, AcceptTransferApi, RejectTransferApi,
                    UpdateProductPriceApi, ProductPriceHistoryApi, OrganizationStockLevelsAPIView,
                    RemoveStockAPIView, InventoryBatchListAPIView, CategoryDeleteApi, PurchaseOrderCreateApi,
-                   PurchaseOrderListApi, SupplierListCreateApi, SupplierDetailApi, PurchaseOrderDetailApi)
+                   PurchaseOrderListApi, SupplierListCreateApi, SupplierDetailApi, PurchaseOrderDetailApi,
+                   PaySupplierCreditApi)
 
 urlpatterns = [
     path('purchase-orders/',PurchaseOrderListApi.as_view(), name='cpurchase-order-list'),
@@ -12,6 +13,7 @@ urlpatterns = [
     path('purchase-orders/<str:po_id>/', PurchaseOrderDetailApi.as_view(), name='purchase-order-detail'),
     path('suppliers/', SupplierListCreateApi.as_view(), name='suppliers'),
     path('suppliers/<str:supplier_id>/', SupplierDetailApi.as_view(), name='supplier-detail'),
+    path('suppliers/<str:supplier_id>/accounts-payable/', PaySupplierCreditApi.as_view(), name='accounts-payable'),
     path('receive/', StockReceiveApi.as_view(), name='stock-receive'),
     path('batches/', InventoryBatchListAPIView.as_view(), name='inventory-batches'),
     path('remove/', RemoveStockAPIView.as_view(), name='stock-remove'),

@@ -2,7 +2,6 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from django.db import transaction
 from .models import User, Tenant
-from rest_framework import serializers
 
 
 VALID_PERMISSIONS = [

@@ -278,3 +278,9 @@ class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
             'purchase_items',
             'total_estimated_amount'
         ]
+
+class PaySupplierCreditSerializer(serializers.Serializer):
+    branch_id = serializers.UUIDField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    method = serializers.CharField(max_length=50) # Cash, Transfer, etc.
+    notes = serializers.CharField(required=False, allow_blank=True)

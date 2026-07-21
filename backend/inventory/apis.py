@@ -6,12 +6,13 @@ from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            CategorySerializer, InventoryLogSerializer, UpdateProductPriceSerializer,
                            StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer,
                            RemoveStockSerializer, PurchaseOrderCreateSerializer, InventoryBatchSerializer,
-                           SupplierSerializer, PurchaseOrderListSerializer, PurchaseOrderDetailSerializer)
+                           SupplierSerializer, PurchaseOrderListSerializer, PurchaseOrderDetailSerializer,
+                           PaySupplierCreditSerializer)
 from .services import (receive_stock_service, create_product_service, 
                        create_category_service, accept_transfer_service, initiate_transfer_service,
                        reject_transfer_service, update_product_price_service, remove_stock_service,
                        remove_category_service, create_purchase_order_service, create_supplier_service,
-                       update_supplier_service, delete_supplier_service)
+                       update_supplier_service, delete_supplier_service, pay_supplier_credit_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
                         get_product_price_history, get_organization_stock_levels, get_inventory_batches,
@@ -543,3 +544,35 @@ class PurchaseOrderDetailApi(views.APIView):
 
         except PurchaseOrder.DoesNotExist:
             return Response({"error": "Purchase order not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+
+class PaySupplierCreditApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, supplier_id):
+        serializer = PaySupplierCreditSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+    
+
+        try:
+            ledger = pay_supplier_credit_service(
+                user=request.user,
+                supplier_id=supplier_id,
+                branch_id=serializer.validated_data['branch_id'],
+                amount=serializer.validated_data['amount'],
+                method=serializer.validated_data['method'],
+                processed_by = request.user,
+                notes=serializer.validated_data.get('notes', ''),
+            )
+            
+            return Response({
+                "message": "Payment successful",
+                "new_balance": ledger.balance_after,
+                "amount": ledger.amount,
+                "transaction_id": ledger.id,
+                "receipt_no": ledger.reference_id
+            }, status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+            return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)

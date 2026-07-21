@@ -201,7 +201,7 @@ class SupplierLedger(TenantAwareModel):
     """
     class TransactionType(models.TextChoices):
         PURCHASE = 'Purchase', _('Purchase')
-        REPAYMENT = 'Repayment', _('Repayment')
+        CREDIT_PAYMENT = 'Credit_payment', _('Credit_payment')
         RETURN = 'Return', _('Return')
 
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='ledger_entries')
@@ -311,3 +311,20 @@ class PurchaseInvoiceItem(models.Model):
     class Meta:
         db_table = 'purchase_invoice_items'
 
+class SupplierPayment(TenantAwareModel):
+    class Transactiontype(models.TextChoices):
+        PURCHASE='Purchase', _('Purchase')
+        DEBT_PAYMENT='Debt Payment', _('Debt Payment')
+        REFUND = 'Refund', _('Refund')
+
+    invoice = models.ForeignKey(PurchaseInvoice, on_delete=models.CASCADE, related_name='supplier_payments', null=True, blank=True)
+    supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, related_name='supplier_payments', null=True, blank=True)
+    transaction_type= models.CharField(max_length=20, choices=Transactiontype.choices, default=Transactiontype.PURCHASE)
+    branch = models.ForeignKey('common.Branch', on_delete=models.PROTECT, null=True)
+    processed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True)
+    method = models.CharField(max_length=20, choices=PaymentMethodChoices.choices)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reference_code = models.CharField(max_length=100, null=True, blank=True)
+
+    class Meta:
+        db_table = 'supplier_payments'
