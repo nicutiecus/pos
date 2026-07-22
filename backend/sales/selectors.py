@@ -1,6 +1,6 @@
 from .models import SalesOrder, CustomerLedger, ShiftReport, SalesOrder, Payment
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 
@@ -69,10 +69,18 @@ def get_sale_detail(*, user, sale_id):
 
 
 def get_customer_ledger(*, user, customer_id: str):
+
+    payment_method_subquery = Payment.objects.filter(
+        reference_code=OuterRef('reference_id'),
+        tenant=user.tenant
+    ).values('method')[:1]
+
     query = CustomerLedger.objects.filter(
         tenant=user.tenant,
         customer_id=customer_id
-    ).select_related('processed_by', 'branch').order_by('-created_at')
+    ).select_related('processed_by', 'branch').annotate(
+        payment_method= Subquery(payment_method_subquery)
+    ).order_by('-created_at')
     admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
     
     if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:

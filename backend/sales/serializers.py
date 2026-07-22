@@ -105,12 +105,14 @@ class PayDebtSerializer(serializers.Serializer):
 # Ledger History Serializer
 class CustomerLedgerSerializer(serializers.ModelSerializer):
     formatted_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+    payment_method= serializers.CharField(read_only=True)
     
     class Meta:
         model = CustomerLedger
         fields = [
             'id', 'transaction_type', 'amount', 
-            'balance_after', 'reference_id', 'notes', 'formatted_date', 'created_at'
+            'balance_after', 'reference_id', 'notes', 'formatted_date', 'created_at',
+            'payment_method'
         ]
 
 class CloseShiftSerializer(serializers.Serializer):

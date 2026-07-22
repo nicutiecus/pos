@@ -16,7 +16,7 @@ from .selectors import (get_sales_list, get_sale_detail, get_customer_ledger,
                         get_open_shift_reports, get_sales_payments_list)
 from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer, 
                           CreateSaleSerializer, PayDebtSerializer, CustomerLedgerSerializer,
-                          CloseShiftSerializer, ShiftReportSerializer)
+                          CloseShiftSerializer, ShiftReportSerializer, SalesPaymentListSerializer)
 
 from .services import (create_sale_service, pay_customer_debt_service, close_shift_service, 
                        create_void_request, resolve_void_request)

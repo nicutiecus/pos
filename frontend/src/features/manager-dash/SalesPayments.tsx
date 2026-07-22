@@ -41,7 +41,7 @@ const SalesPayments: React.FC = () => {
   const [hasNext, setHasNext] = useState(false);
   const [hasPrev, setHasPrev] = useState(false);
 
-  // 1. Fetch Branches (Admins Only)[cite: 2]
+  // 1. Fetch Branches (Admins Only)
   useEffect(() => {
     if (isAdmin) {
       const fetchBranches = async () => {
@@ -56,7 +56,7 @@ const SalesPayments: React.FC = () => {
     }
   }, [isAdmin]);
 
-  // 2. Fetch Payments Logic[cite: 2]
+  // 2. Fetch Payments Logic
   const fetchPayments = async () => {
     setIsLoading(true);
     setError(null);
@@ -85,7 +85,7 @@ const SalesPayments: React.FC = () => {
     }
   };
 
-  // 3. Debounce fetch on search, page, or filter changes[cite: 2]
+  // 3. Debounce fetch on search, page, or filter changes
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchPayments();
@@ -95,12 +95,12 @@ const SalesPayments: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchCustomer, filterDate, currentPage, filterBranchId]); 
 
-  // 4. Reset to page 1 ONLY when filters change[cite: 2]
+  // 4. Reset to page 1 ONLY when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchCustomer, filterBranchId, filterDate]);
 
-  // Helper for Transaction Type Badges[cite: 2]
+  // Helper for Transaction Type Badges
   const getTypeBadge = (type: string) => {
     switch (type) {
       case 'Sales':
@@ -134,7 +134,7 @@ const SalesPayments: React.FC = () => {
             title="Filter by Date"
           />
 
-          {/* Branch Filter (Admins Only)[cite: 2] */}
+          {/* Branch Filter (Admins Only) */}
           {isAdmin && (
             <select 
               value={filterBranchId}
@@ -148,7 +148,7 @@ const SalesPayments: React.FC = () => {
             </select>
           )}
 
-          {/* Customer Search Input[cite: 2] */}
+          {/* Customer Search Input*/}
           <div className="relative w-full md:w-72 shrink-0">
             <input 
               type="text" 
@@ -169,7 +169,7 @@ const SalesPayments: React.FC = () => {
         </div>
       )}
 
-      {/* DATA TABLE[cite: 2] */}
+      {/* DATA TABLE */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         {isLoading ? (
           <div className="flex justify-center items-center h-64 text-gray-500">
@@ -235,7 +235,7 @@ const SalesPayments: React.FC = () => {
           </div>
         )}
 
-        {/* PAGINATION FOOTER[cite: 2] */}
+        {/* PAGINATION FOOTER */}
         <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
             <span className="text-sm text-gray-500 font-medium">
                 Page <span className="font-bold text-gray-900">{currentPage}</span>

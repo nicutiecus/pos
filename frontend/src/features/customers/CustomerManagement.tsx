@@ -18,6 +18,7 @@ interface LedgerEntry {
   created_at: string;
   transaction_type: 'Sale' | 'Payment' | 'Refund';
   amount: string;
+  payment_method: string;
   balance_after: string;
   reference: string;
 }
@@ -577,6 +578,7 @@ const CustomerManagement: React.FC = () => {
                                       <div className="text-right">
                                           <div className={`font-bold ${entry.transaction_type === 'Payment' ? 'text-green-600' : 'text-red-600'}`}>
                                               {entry.transaction_type === 'Payment' ? '-' : '+'} ₦{Number(entry.amount).toLocaleString()}
+                                            <p className="text-xs text-gray-500 mt-1 font-medium">payment method:{entry.payment_method} </p>
                                           </div>
                                           <div className="text-xs text-gray-500">Balance: ₦{Number(entry.balance_after).toLocaleString()}</div>
                                       </div>

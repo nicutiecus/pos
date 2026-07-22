@@ -124,6 +124,9 @@ const AdminLayout: React.FC = () => {
                 <Link to="/admin/sales-orders" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                Sales Orders
                 </Link>
+                <Link to="/admin/sales-payments" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                  Sales Payments
+                </Link>
                 <Link to="/admin/eodreport" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                   Void Sales
                 </Link>
