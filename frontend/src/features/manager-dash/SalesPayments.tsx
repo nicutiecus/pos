@@ -55,7 +55,7 @@ const SalesPayments: React.FC = () => {
       fetchBranches();
     }
   }, [isAdmin]);
-ss
+
   // 2. Fetch Payments Logic[cite: 2]
   const fetchPayments = async () => {
     setIsLoading(true);
