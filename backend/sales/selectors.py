@@ -229,3 +229,44 @@ def get_open_shift_reports(*, user, branch_id=None, status='Open', search_term=N
         )
 
     return query
+
+
+def get_sales_payments_list(*, user, branch_id=None, search_term=None, ordering=None):
+    """
+    Fetches sales payment history for the tenant.
+    Optionally filters by branch.
+    """
+    query = Payment.objects.filter(tenant=user.tenant).select_related(
+        'customer', 'order', 'branch', 'processed_by'
+    ).order_by('-created_at')
+
+
+    admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+
+    if user.role not in admin_roles:
+        # Non-admins: FORCE the query to only return their assigned branch
+        # Even if they try to pass a different branch_id in the URL, we ignore it.
+        query = query.filter(branch_id=user.branch_id)
+    
+    elif branch_id:
+        # Admins: Can see everything, but allow them to filter by a specific branch if requested
+        query = query.filter(branch_id=branch_id)
+    if search_term:
+        query = query.filter(
+            Q(id__icontains=search_term) |
+            Q(customer__name__icontains=search_term) 
+        )
+    # Define exactly which fields are safe to sort by
+    allowed_ordering_fields = [
+        'created_at', '-created_at', 
+        'amount', '-amount', 
+        'customer__name', '-customer__name',
+    
+    ]
+    if ordering and ordering in allowed_ordering_fields:
+        query = query.order_by(ordering)
+    else:
+        # Default fallback if no ordering is provided or an invalid one is sent
+        query = query.order_by('-created_at')
+
+    return query

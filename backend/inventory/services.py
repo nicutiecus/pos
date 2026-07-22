@@ -199,7 +199,7 @@ def receive_stock_service(
             ).order_by('-created_at', '-id').first()
             
         current_balance = last_ledger_entry.balance_after if last_ledger_entry else Decimal('0.00')
-        final_debt_balance = current_balance
+        final_debt_balance = current_balance + debt_incurred
 
         if debt_incurred > 0:
 
@@ -210,20 +210,20 @@ def receive_stock_service(
                     supplier=supplier,
                     branch=branch,
                     transaction_type='Purchase',
-                    amount=total_invoice_amount,
+                    amount=debt_incurred,
                     balance_after=final_debt_balance,
                     reference_id=invoice.id,
                     notes=f"Stock received on Invoice {invoice.id}"
                 )
             supplier.current_debt = final_debt_balance
-            supplier.save(update_fields='current_debt')
+            supplier.save(update_fields=['current_debt'])
                 
 
         # If money was paid immediately, log the payment to reduce the debt
         if amount_paid_upfront > 0:
             SupplierPayment.objects.create(
                 tenant=user.tenant,
-                invoive= invoice,
+                invoice= invoice,
                 supplier=supplier,
                 branch=branch,
                 transaction_type='Purchase',
@@ -238,7 +238,7 @@ def receive_stock_service(
         if po:
             # You could add logic here to check if partial or full, but for now:
             po.status = PurchaseOrder.OrderStatus.RECEIVED
-            po.save()
+            po.save(update_fields=['status'])
 
     return invoice
 

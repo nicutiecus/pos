@@ -155,3 +155,29 @@ class ShiftReportSerializer(serializers.ModelSerializer):
             return obj.cashier.get_full_name() or obj.cashier.email
         return "Unknown"
     
+
+class SalesPaymentListSerializer(serializers.ModelSerializer):
+
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+    formatted_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+    payment_method = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Payment
+        fields = [
+            'id', 'branch_name', 'cashier_name', 
+            'customer_name', 'amount', 'amount_paid', 
+            'payment_status', 'formatted_date', 'method'
+        ]
+
+
+    """def get_payment_method(self, obj):
+        # Grab the method from every payment attached to this order
+        methods = [payment.method for payment in obj.payments.all()]
+        
+        # Use set() to remove duplicates (e.g., if they made two separate "Cash" payments)
+        # Then join them into a clean string for the frontend table
+        return ", ".join(set(methods)) if methods else "None"
+
+        """

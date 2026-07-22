@@ -44,6 +44,9 @@ const InventoryReceiving: React.FC = () => {
   const [receiveItems, setReceiveItems] = useState<ReceiveFormItem[]>([]);
   const [notes, setNotes] = useState<string>('');
   const [amountPaidUpfront, setAmountPaidUpfront] = useState<number | ''>('');
+  
+  // NEW: Payment Method State
+  const [paymentMethod, setPaymentMethod] = useState<string>('Cash'); 
 
   // UI State
   const [isLoading, setIsLoading] = useState(true);
@@ -163,6 +166,7 @@ const InventoryReceiving: React.FC = () => {
         purchase_order_id: selectedPO.id, 
         branch_id: selectedPO.branch_id,  
         amount_paid_upfront: amountPaidUpfront === '' ? 0 : Number(amountPaidUpfront),
+        payment_method: Number(amountPaidUpfront) > 0 ? paymentMethod : null, 
         notes: notes,
         items: itemsToReceive.map(item => ({
             product_id: item.product_id,
@@ -180,6 +184,7 @@ const InventoryReceiving: React.FC = () => {
       setSelectedPOId('');
       setNotes('');
       setAmountPaidUpfront('');
+      setPaymentMethod('Cash'); // Reset payment method
       loadInitialData();
 
     } catch (err) {
@@ -312,7 +317,8 @@ const InventoryReceiving: React.FC = () => {
                 ))}
               </div>
 
-              <div className="pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Updated Grid layout for payment section */}
+              <div className="pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Amount Paid Upfront (₦)</label>
                   <input 
@@ -326,6 +332,25 @@ const InventoryReceiving: React.FC = () => {
                   />
                   <p className="text-xs text-gray-500 mt-1 font-medium">Leave blank if this is entirely on credit.</p>
                 </div>
+
+                {/* NEW: Conditional Payment Method Select */}
+                {Number(amountPaidUpfront) > 0 ? (
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Payment Method</label>
+                    <select
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      required={Number(amountPaidUpfront) > 0}
+                      className="w-full rounded-lg border-gray-300 shadow-sm p-3 border focus:ring-blue-500 bg-white"
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Transfer">Bank Transfer</option>
+                      <option value="POS">POS / Card</option>
+                    </select>
+                  </div>
+                ) : (
+                   <div></div> /* Empty div to maintain grid structure */
+                )}
 
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Delivery Notes / Waybill Ref</label>

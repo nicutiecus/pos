@@ -13,7 +13,7 @@ from django.utils import timezone
 from .pagination import StandardResultsSetPagination
 from .selectors import (get_sales_list, get_sale_detail, get_customer_ledger, 
                         get_current_shift_data, get_shift_reports, get_shift_report_detail,
-                        get_open_shift_reports)
+                        get_open_shift_reports, get_sales_payments_list)
 from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer, 
                           CreateSaleSerializer, PayDebtSerializer, CustomerLedgerSerializer,
                           CloseShiftSerializer, ShiftReportSerializer)
@@ -495,3 +495,30 @@ class ManagerVoidApprovalAPIView(APIView):
             return Response({"message": f"Request {void_req.status} successfully."})
         except Exception as e:
             return Response({"error": str(e)}, status=400)
+        
+
+
+class SalesPaymentListApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        branch_id = request.GET.get('branch_id') # Optional filter
+        
+        # Security: If user is not admin, force them to only see their branch
+        # (You can implement this logic later if needed)
+        search_term = request.GET.get('search', '').strip()
+
+        sales = get_sales_payments_list(user=request.user, branch_id=branch_id, search_term=search_term)
+        
+        # Pagination could be added here later
+         # 2. Initialize the paginator
+        paginator = StandardResultsSetPagination()
+        
+        # 3. Slice the data based on the ?page= parameter in the URL
+        paginated_sales = paginator.paginate_queryset(sales, request)
+        
+        # 4. Serialize ONLY the 10 items for this specific page
+        serializer = SalesPaymentListSerializer(paginated_sales, many=True)
+        
+    
+        return paginator.get_paginated_response(serializer.data)

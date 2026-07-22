@@ -21,6 +21,7 @@ class StockReceiveSerializer(serializers.Serializer):
     branch_id = serializers.UUIDField()
     items = StockReceiveItemSerializer(many=True)
     notes = serializers.CharField(required=False, allow_blank=True)
+    payment_method = serializers.CharField(required=False, allow_blank = True)
     amount_paid_upfront = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, default=0.00)
 
 

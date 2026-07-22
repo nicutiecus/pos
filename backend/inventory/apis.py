@@ -51,9 +51,14 @@ class StockReceiveApi(views.APIView):
                 supplier_id= po.supplier_id,
                 items=data['items'],
                 amount_paid_upfront=data.get('amount_paid_upfront'),
+                payment_method= data.get('payment_method'),
                 notes=data.get('notes', '')
             )
             return Response({"message": "Stock received successfully."}, status=status.HTTP_201_CREATED)
+
+        except PurchaseOrder.DoesNotExist:
+            # Handle the invalid ID gracefully
+            return Response({"error": "Purchase order not found."}, status=status.HTTP_404_NOT_FOUND)
         except ValidationError as e:
             error_msg = e.message if hasattr(e, 'message') else str(e)
             return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)

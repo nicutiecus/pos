@@ -52,7 +52,8 @@ import AdminEODReport from '../features/admin-dash/AdminEODReport';
 import PeriodicReport from '../features/admin-dash/AdminPeriodicReport';
 //Settings
 import AdminSettings from '../features/admin-dash/AdminSettings';
-
+//Sales Payments
+import SalesPayments from '../features/manager-dash/SalesPayments';
 //super
 import SuperAdminDashboard from '../features/super-admin/SuperAdminDashboard';
 import SuperAdminLogin from '../features/super-admin/SuperAdminLogin';
@@ -109,6 +110,7 @@ const AppRouter: React.FC = () => {
             <Route path="inventory-batches" element={<InventoryBatches/>} />
             <Route path="inventory" element={<InventoryManagement/>} />
              <Route path="sales-orders" element={<AdminSalesOrders/>} />
+             <Route path ="sales-payments" element={<SalesPayments/>}/>
             <Route path="inventory-logs" element={<InventoryLogs/>} />
             <Route path="inventory/receive" element={<InventoryReceiving/>}/>
             <Route path="purchase-orders" element={<PurchaseOrders/>} />

@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Product, InventoryBatch, Supplier, SupplierLedger, PurchaseInvoice, PurchaseOrder
+from .models import (Product, InventoryBatch, Supplier, SupplierLedger, PurchaseInvoice, 
+                     PurchaseOrder, SupplierPayment)
 # Register your models here.
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
@@ -15,6 +16,10 @@ class InventoryBatchAdmin(admin.ModelAdmin):
 class SupplierAdmin(admin.ModelAdmin):
     list_display=("name","contact_person","current_debt")
     search_fields=("name","contact_person")
+
+@admin.register(SupplierPayment)
+class SupplierPayment(admin.ModelAdmin):
+    list_display=('invoice', 'supplier', 'transaction_type', 'amount')
 
 @admin.register(SupplierLedger)
 class SupplierLedgerAdmin(admin.ModelAdmin):

@@ -2,7 +2,7 @@ from django.urls import path, include
 from .apis import (CreateSaleApi, SalesListApi, SalesDetailApi, 
                    PayDebtApi, CustomerLedgerApi, CloseShiftApi, CurrentShiftApi,
                    ActiveShiftAPIView, StartShiftAPIView, ClosedShiftListApi, ShiftReportDetailApi,
-                   OpenShiftListApi)
+                   OpenShiftListApi, SalesPaymentListApi)
 from rest_framework.routers import DefaultRouter
 from .views import CustomerViewSet
 
@@ -22,6 +22,7 @@ urlpatterns = [
     path('<str:sale_id>/', SalesDetailApi.as_view(), name='sales-detail'),
     path('shift/active/', ActiveShiftAPIView.as_view(), name='active-shift'),
     path('shift/start/', StartShiftAPIView.as_view(), name='start-shift' ),
+    path('sales-payments/', SalesPaymentListApi.as_view(), name ='sales-payment-list' ),
 
     #shift reports
     path('reports/shift/current/', CurrentShiftApi.as_view(), name='shift-current'),
