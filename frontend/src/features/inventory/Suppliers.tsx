@@ -1,6 +1,7 @@
 import React, { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import api from '../../api/axiosInstance';
 import { isAxiosError } from 'axios';
+import { formatBackendDate } from '../../utils/dateFormatter';
 
 // --- Interfaces ---
 interface Supplier {
@@ -10,8 +11,18 @@ interface Supplier {
   phone: string | null;
   address: string | null;
   contact_person: string | null;
-  current_debt: string | number;
-  branch_specific_debt: string;
+  current_debt: number;
+  branch_specific_debt: number;
+
+}
+interface LedgerEntry{
+  id: string;
+  formatted_date: string;
+  transaction_type: 'Purchase' | 'Credit_payment' | 'Return';
+  amount: string;
+  payment_method: string;
+  balance_after: string;
+  reference_id: string;
 
 }
 
@@ -37,6 +48,11 @@ const Suppliers: React.FC = () => {
   const [editContactPerson, setEditContactPerson] = useState<Supplier | null>(null);
   const [newContact, setNewContact] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [isLedgerOpen, setIsLedgerOpen] = useState(false);
+  const [activeLedgerSupplier, setActiveLedgerSupplier] = useState<Supplier | null>(null);
+  const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
+  const [isLoadingLedger, setIsLoadingLedger] = useState(false);
 
   // New Supplier Form State
   const [formData, setFormData] = useState({
@@ -108,6 +124,31 @@ const Suppliers: React.FC = () => {
   }, [searchQuery]);
 
   // --- Handlers ---
+  const handleViewLedger = async (supplier: Supplier) => {
+    setActiveLedgerSupplier(supplier);
+    setIsLedgerOpen(true);
+    setIsLoadingLedger(true);
+    
+    try {
+        
+        const params = new URLSearchParams();
+        if (!isAdmin && branchId) {
+          params.append('branch_id', branchId);
+      }
+      // Typically an endpoint like /customers/{id}/ledger/ or filtering sales
+      const res = await api.get(`/inventory/suppliers/${supplier.id}/ledger/?${params.toString()}`);
+      setLedgerData(res.data);
+    } catch (err) {
+      console.error("Failed to fetch ledger", err);
+      // Fallback empty state if endpoint isn't ready
+      setLedgerData([]); 
+    } finally {
+      setIsLoadingLedger(false);
+    }
+  };
+
+
+
   const handleOpenPayment = (supplier: Supplier) => {
       setPaymentSupplier(supplier);
       // Auto-fill the amount with their total debt for convenience
@@ -316,6 +357,9 @@ const Suppliers: React.FC = () => {
                                             >
                                                 💳 Pay
                                             </button>
+                        <button onClick={() => handleViewLedger(supplier)} className="text-blue-600 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded">
+                                            📓 Ledger
+                                        </button>
                         <button onClick={() => handleDelete(supplier.id, supplier.name)} className="text-red-500 hover:text-red-700 text-sm font-medium" title="Remove Supplier">
                           Delete
                         </button>
@@ -520,6 +564,62 @@ const Suppliers: React.FC = () => {
           </div>
       )}
       
+
+      
+      {/* --- LEDGER MODAL --- */}
+      {isLedgerOpen && activeLedgerSupplier && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
+                <div className="bg-gray-50 p-4 border-b flex justify-between items-start">
+                    <div>
+                        <h3 className="font-bold text-lg text-gray-800">Ledger: {activeLedgerSupplier.name}</h3>
+                        <p className="text-sm text-gray-500 font-mono">{activeLedgerSupplier.phone}</p>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-xs font-bold text-gray-500 uppercase">Current Debt</div>
+                        <div className={`text-xl font-bold ${(isAdmin? activeLedgerSupplier.current_debt: activeLedgerSupplier.branch_specific_debt) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    ₦{Number(isAdmin? activeLedgerSupplier.current_debt : activeLedgerSupplier.branch_specific_debt).toLocaleString()}
+                    </div>
+                </div>
+            </div>
+                        
+            <div className="flex-1 overflow-y-auto p-4">
+                {isLoadingLedger ? (
+                  <div className="text-center text-gray-400 py-10">Loading Ledger History...</div>
+                            ) : ledgerData.length === 0 ? (
+                                <div className="text-center text-gray-400 py-10 italic">No ledger history found for this customer.</div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {ledgerData.map((entry, idx) => (
+                                        <div key={idx} className="flex justify-between items-center p-3 border rounded-lg bg-white shadow-sm">
+                                            <div>
+                                                <div className="text-xs text-gray-400">{formatBackendDate(entry.formatted_date)}</div>
+                                                <div className="font-bold text-sm text-gray-700">
+                                                    {entry.transaction_type === 'Purchase' ? '🛍️ Credit Purchase' : entry.transaction_type === 'Credit_payment' ? '💰 Debt Repayment' : 'Refund'}
+                                                    <span className="ml-2 font-mono text-xs text-gray-400">Ref: {entry.reference_id}</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className={`font-bold ${entry.transaction_type === 'Credit_payment' ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {entry.transaction_type === 'Credit_payment' ? '-' : '+'} ₦{Number(entry.amount).toLocaleString()}
+                                                  <p className="text-xs text-gray-500 mt-1 font-medium">payment method:{entry.payment_method} </p>
+                                                </div>
+                                                <div className="text-xs text-gray-500">Balance: ₦{Number(entry.balance_after).toLocaleString()}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="p-4 bg-gray-50 border-t flex justify-end">
+                            <button onClick={() => setIsLedgerOpen(false)} className="px-6 py-2 bg-gray-800 text-white rounded font-bold hover:bg-gray-900">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
     </div>
   );

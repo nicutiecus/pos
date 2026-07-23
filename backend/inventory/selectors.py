@@ -1,7 +1,7 @@
 from django.db.models import Sum, F, Q, DecimalField
 from django.utils import timezone
 from .models import (InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory, InventoryLog, Supplier,
-                     PurchaseOrder)
+                     PurchaseOrder, SupplierPayment, SupplierLedger)
 from django.core.exceptions import PermissionDenied
 from django.core.cache import cache
 from .serializers import ProductCatalogSerializer # We use the serializer here now
@@ -275,3 +275,28 @@ def get_purchase_orders(*, user, branch_id, search_query=None, status=None):
         )
 
     return qs.order_by('created_at')
+
+def get_supplier_payments(*, user, branch_id, search_query=None):
+    qs= SupplierPayment.objects.filter(tenant=user.tenant).select_related('invoice','supplier','branch','processed_by')
+
+    if user.role not in ['Admin', 'Tenant_Admin', 'Super_Admin']:
+            qs = qs.filter(branch=user.branch_id)
+    elif branch_id:
+            # If Admin explicitly filters by a branch
+            qs = qs.filter(branch_id=branch_id)
+
+    if search_query:
+            qs = qs.filter(
+                Q(id__icontains=search_query) | 
+                Q(supplier__name__icontains=search_query)
+            )
+    return qs.order_by('created_at')
+
+def get_supplier_ledger(*, user, supplier_id : str):
+    query = SupplierLedger.objects.filter(tenant=user.tenant, supplier_id=supplier_id).select_related('supplier','branch','processed_by')
+
+    admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+    if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
+            # If they are a standard Manager or Cashier, lock the query to their branch
+        query = query.filter(branch_id=user.branch_id)
+    return query

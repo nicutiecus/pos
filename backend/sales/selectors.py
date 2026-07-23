@@ -239,7 +239,7 @@ def get_open_shift_reports(*, user, branch_id=None, status='Open', search_term=N
     return query
 
 
-def get_sales_payments_list(*, user, branch_id=None, search_term=None, ordering=None):
+def get_sales_payments_list(*, user, branch_id=None, search_term=None, ordering=None, start_date=None, end_date=None):
     """
     Fetches sales payment history for the tenant.
     Optionally filters by branch.
@@ -275,6 +275,22 @@ def get_sales_payments_list(*, user, branch_id=None, search_term=None, ordering=
         query = query.order_by(ordering)
     else:
         # Default fallback if no ordering is provided or an invalid one is sent
+        query = query.order_by('-created_at')
+
+    if start_date:
+        query = query.filter(created_at__date__gte=start_date)
+    if end_date:
+        query = query.filter(created_at__date__lte=end_date)
+
+    allowed_ordering_fields = [
+        'created_at', '-created_at', 
+        'amount', '-amount', 
+        'customer__name', '-customer__name',
+    ]
+    
+    if ordering and ordering in allowed_ordering_fields:
+        query = query.order_by(ordering)
+    else:
         query = query.order_by('-created_at')
 
     return query

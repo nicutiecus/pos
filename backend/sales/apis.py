@@ -507,18 +507,23 @@ class SalesPaymentListApi(views.APIView):
         # Security: If user is not admin, force them to only see their branch
         # (You can implement this logic later if needed)
         search_term = request.GET.get('search', '').strip()
+        ordering = request.GET.get('ordering')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
 
-        sales = get_sales_payments_list(user=request.user, branch_id=branch_id, search_term=search_term)
+        sales_payments = get_sales_payments_list(user=request.user, branch_id=branch_id, 
+                                                 search_term=search_term,
+                                                 ordering=ordering, start_date= start_date,
+                                                 end_date=end_date)
         
-        # Pagination could be added here later
          # 2. Initialize the paginator
         paginator = StandardResultsSetPagination()
         
         # 3. Slice the data based on the ?page= parameter in the URL
-        paginated_sales = paginator.paginate_queryset(sales, request)
+        paginated_sales_payment = paginator.paginate_queryset(sales_payments, request)
         
         # 4. Serialize ONLY the 10 items for this specific page
-        serializer = SalesPaymentListSerializer(paginated_sales, many=True)
+        serializer = SalesPaymentListSerializer(paginated_sales_payment, many=True)
         
     
         return paginator.get_paginated_response(serializer.data)

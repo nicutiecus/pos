@@ -19,10 +19,11 @@ urlpatterns = [
 
     path('create/', CreateSaleApi.as_view(), name='create-sale'),
     path('list/', SalesListApi.as_view(), name = 'sales-list'),
+    path('sales-payments/', SalesPaymentListApi.as_view(), name ='sales-payment-list' ),
     path('<str:sale_id>/', SalesDetailApi.as_view(), name='sales-detail'),
     path('shift/active/', ActiveShiftAPIView.as_view(), name='active-shift'),
     path('shift/start/', StartShiftAPIView.as_view(), name='start-shift' ),
-    path('sales-payments/', SalesPaymentListApi.as_view(), name ='sales-payment-list' ),
+    
 
     #shift reports
     path('reports/shift/current/', CurrentShiftApi.as_view(), name='shift-current'),

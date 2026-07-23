@@ -7,7 +7,7 @@ from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer,
                            RemoveStockSerializer, PurchaseOrderCreateSerializer, InventoryBatchSerializer,
                            SupplierSerializer, PurchaseOrderListSerializer, PurchaseOrderDetailSerializer,
-                           PaySupplierCreditSerializer)
+                           PaySupplierCreditSerializer, SupplierLedgerSerializer)
 from .services import (receive_stock_service, create_product_service, 
                        create_category_service, accept_transfer_service, initiate_transfer_service,
                        reject_transfer_service, update_product_price_service, remove_stock_service,
@@ -16,14 +16,16 @@ from .services import (receive_stock_service, create_product_service,
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
                         get_product_price_history, get_organization_stock_levels, get_inventory_batches,
-                        get_suppliers, get_purchase_orders
+                        get_suppliers, get_purchase_orders, get_supplier_payments, get_supplier_ledger
                         )
 from django.core.exceptions import PermissionDenied, ValidationError
 from .models import StockTransferLog, Supplier, PurchaseOrder
 
+
 from rest_framework.views import APIView
 
 from django.db.models import ProtectedError
+from common.pagination import StandardResultsSetPagination
 
 
 
@@ -450,10 +452,12 @@ class PurchaseOrderListApi(views.APIView):
             search_query=search_query,
             status= status_filter
         )
-
+        paginator = StandardResultsSetPagination()
+        paginated_orders = paginator.paginate_queryset(orders, request)
         # Serialize the data and return it
-        serializer = PurchaseOrderListSerializer(orders, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)  
+        serializer = PurchaseOrderListSerializer(paginated_orders, many=True)
+        
+        return paginator.get_paginated_response(serializer.data)
 
 class SupplierListCreateApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -523,6 +527,15 @@ class SupplierDetailApi(views.APIView):
 
 
 
+class SupplierLedgerApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, supplier_id):
+        ledger_records = get_supplier_ledger(user=request.user, supplier_id=supplier_id)
+        serializer = SupplierLedgerSerializer(ledger_records, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class PurchaseOrderDetailApi(views.APIView):
     permission_classes = [IsAuthenticated]
 
@@ -581,3 +594,20 @@ class PaySupplierCreditApi(views.APIView):
         except ValidationError as e:
             error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
             return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
+
+class SupplierPaymentListApi(views.APIView):
+
+    permission_classes=[IsAuthenticated]
+
+    def get(self,request):
+
+        branch_id = request.query_params.get('branch_id')
+        search_query = request.query_params.get('search')
+
+        supplier_payments= get_supplier_payments(
+            user= request.user,
+            branch_id= branch_id,
+            search_query= search_query
+
+
+        )

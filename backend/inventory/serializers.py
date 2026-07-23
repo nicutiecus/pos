@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from .models import (Product, Category, InventoryBatch, StockTransferLog, ProductPriceHistory, 
-                     InventoryLog, Supplier, PurchaseOrder)
-from .models import PurchaseOrder, PurchaseOrderItem  # Import your item model!
+                     InventoryLog, Supplier, PurchaseOrder, SupplierLedger, PurchaseOrderItem )
 
 
 class StockReceiveItemSerializer(serializers.Serializer):
@@ -246,7 +245,17 @@ class SupplierSerializer(serializers.ModelSerializer):
         return value
 
 
-
+class SupplierLedgerSerializer(serializers.ModelSerializer):
+    formatted_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
+    payment_method= serializers.CharField(read_only=True)
+    
+    class Meta:
+        model = SupplierLedger
+        fields = [
+            'id', 'transaction_type', 'amount', 
+            'balance_after', 'reference_id', 'notes', 'formatted_date',
+            'payment_method'
+        ]
 
 class PurchaseOrderItemDetailSerializer(serializers.ModelSerializer):
     # Get the actual string name of the product

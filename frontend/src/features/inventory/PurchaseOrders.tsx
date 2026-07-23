@@ -28,11 +28,24 @@ interface PurchaseOrderDetail extends PurchaseOrder {
   purchase_items: POItemDetail[];
 }
 
+interface Branch {
+  id: string | number;
+  name: string;
+}
+
 const PurchaseOrders: React.FC = () => {
+
+  const userRole = localStorage.getItem('userRole')
+  const localBranchId = localStorage.getItem('branchId');
+  const isAdmin = userRole === 'Tenant_Admin' || userRole === 'ADMIN';
+  const [filterBranchId, setFilterBranchId] = useState<string | number>(isAdmin ? '' : (localBranchId || ''));
+
+  const [branches, setBranches] = useState<Branch[]>([])
+  
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   
+  const [error, setError] = useState<string | null>(null)
   // Create Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -41,13 +54,48 @@ const PurchaseOrders: React.FC = () => {
   const [poDetails, setPoDetails] = useState<PurchaseOrderDetail | null>(null);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
 
+   // --- Pagination & Search State ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasNext, setHasNext] = useState(false);
+    const [hasPrev, setHasPrev] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+
+
+
+  // 1. Fetch Branches (Admins Only)
+  useEffect(() => {
+    if (isAdmin) {
+      const fetchBranches = async () => {
+        try {
+          const res = await api.get('/branches/');
+          setBranches(res.data);
+        } catch (err) {
+          console.error("Failed to fetch branches:", err);
+        }
+      };
+      fetchBranches();
+    }
+  }, [isAdmin]);
+
   const fetchOrders = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`/inventory/purchase-orders/?search=${searchQuery}`);
-      setOrders(response.data.results || response.data);
-    } catch (err) {
-      console.error("Failed to load purchase orders", err);
+      const response = await api.get(`/inventory/purchase-orders/`,{
+        params: { 
+          page: currentPage, 
+          search: searchTerm,
+          branch_id: filterBranchId || undefined // Pass branch_id for filtering
+      }});
+
+      const data = response.data
+      const fetchedOrders = data.results ? data.results : (Array.isArray(data) ? data : []);
+
+      setHasNext(!!data.next);
+      setHasPrev(!!data.previous);
+      setOrders(fetchedOrders);
+    } catch (err: any) {
+      console.error("Failed to fetch orders:", err);
+      setError(err.response?.data?.message || err.response?.data?.detail || "Failed to load sales orders.");
     } finally {
       setIsLoading(false);
     }
@@ -60,12 +108,17 @@ const PurchaseOrders: React.FC = () => {
 
     return () => clearTimeout(delayDebounce);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]);
+  }, [searchTerm, currentPage, filterBranchId]);
 
   const handleModalSuccess = () => {
     setIsModalOpen(false);
     fetchOrders(); 
   };
+  //  Reset to page 1 ONLY when the search term or branch filter changes
+    useEffect(() => {
+      setCurrentPage(1);
+    }, [searchTerm, filterBranchId]);
+  
 
   // NEW: Fetch PO Details when a row is clicked
   const handleRowClick = async (id: string) => {
@@ -111,12 +164,25 @@ const PurchaseOrders: React.FC = () => {
         </div>
         
         <div className="flex w-full md:w-auto gap-3">
+          {/* Branch Filter (Admins Only) */}
+          {isAdmin && (
+            <select 
+              value={filterBranchId}
+              onChange={(e) => setFilterBranchId(e.target.value)}
+              className="w-full sm:w-auto p-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-gray-50 cursor-pointer"
+            >
+              <option value="">All Branches</option>
+              {branches.map(branch => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </select>
+          )}
           <div className="relative w-full md:w-72">
             <input 
               type="text" 
               placeholder="Search by PO ID or Supplier..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm"
             />
             <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
@@ -130,7 +196,12 @@ const PurchaseOrders: React.FC = () => {
           </button>
         </div>
       </div>
-
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm">
+          <p className="font-bold">Error</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
       {/* TABLE SECTION */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
@@ -182,6 +253,28 @@ const PurchaseOrders: React.FC = () => {
           </div>
         )}
       </div>
+
+      <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <span className="text-sm text-gray-500 font-medium">
+                Page <span className="font-bold text-gray-900">{currentPage}</span>
+            </span>
+            <div className="flex space-x-2">
+                <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={!hasPrev || isLoading}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                    Previous
+                </button>
+                <button
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    disabled={!hasNext || isLoading}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                    Next
+                </button>
+            </div>
+        </div>
 
       {/* CREATE PO MODAL */}
       <CreatePOModal 

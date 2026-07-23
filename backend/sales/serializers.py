@@ -162,15 +162,15 @@ class SalesPaymentListSerializer(serializers.ModelSerializer):
 
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     branch_name = serializers.CharField(source='branch.name', read_only=True)
+    cashier_name = serializers.DateTimeField(source='processed_by.email', read_only=True)
     formatted_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M")
-    payment_method = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
         fields = [
             'id', 'branch_name', 'cashier_name', 
-            'customer_name', 'amount', 'amount_paid', 
-            'payment_status', 'formatted_date', 'method'
+            'customer_name', 'amount', 'method', 'transaction_type',
+            'reference_code', 'formatted_date'
         ]
 
 

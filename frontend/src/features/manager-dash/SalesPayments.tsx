@@ -11,7 +11,7 @@ export interface Payment {
   customer_name: string | null; 
   branch_name: string | null;
   processed_by_name: string | null;
-  created_at: string; // Assuming your TenantAwareModel includes a timestamp
+  formatted_date: string; // Assuming your TenantAwareModel includes a timestamp
 }
 
 interface Branch {
@@ -33,7 +33,8 @@ const SalesPayments: React.FC = () => {
   // --- Filters & Search State ---
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filterBranchId, setFilterBranchId] = useState<string | number>(isAdmin ? '' : (localBranchId || ''));
-  const [filterDate, setFilterDate] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [searchCustomer, setSearchCustomer] = useState('');
 
   // --- Pagination State ---
@@ -62,12 +63,13 @@ const SalesPayments: React.FC = () => {
     setError(null);
     try {
       // Adjust this endpoint to match your Django URL routing
-      const response = await api.get('/sales-payments/', {
+      const response = await api.get('/sales/sales-payments/', {
         params: { 
           page: currentPage, 
           search: searchCustomer, // Backend should filter Customer name using this
           branch_id: filterBranchId || undefined,
-          date: filterDate || undefined // Pass the exact date string (YYYY-MM-DD)
+          start_date: startDate || undefined, // Send start date
+          end_date: endDate || undefined      // Send end date
         }
       });
 
@@ -93,12 +95,12 @@ const SalesPayments: React.FC = () => {
 
     return () => clearTimeout(delayDebounceFn);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchCustomer, filterDate, currentPage, filterBranchId]); 
+  }, [searchCustomer, startDate, endDate, currentPage, filterBranchId]); 
 
   // 4. Reset to page 1 ONLY when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchCustomer, filterBranchId, filterDate]);
+  }, [searchCustomer, filterBranchId, startDate, endDate]);
 
   // Helper for Transaction Type Badges
   const getTypeBadge = (type: string) => {
@@ -118,28 +120,44 @@ const SalesPayments: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-6 p-4 relative">
       
       {/* HEADER & FILTERS */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col xl:flex-row justify-between items-center gap-4">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div className="w-full xl:w-auto shrink-0">
           <h2 className="text-2xl font-black text-gray-800 tracking-tight">Payments Ledger</h2>
           <p className="text-sm text-gray-500">Track all sales, debt repayments, and refunds.</p>
         </div>
         
-        <div className="flex flex-col md:flex-row w-full xl:w-auto gap-3 items-center flex-wrap xl:flex-nowrap">
-          {/* Date Filter */}
-          <input 
-            type="date" 
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="w-full md:w-auto p-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-700 bg-gray-50 cursor-pointer"
-            title="Filter by Date"
-          />
+        <div className="flex flex-wrap w-full xl:w-auto gap-3 items-center justify-start xl:justify-end">
+          
+          {/* Start and End Date Filters */}
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-bold uppercase">From</span>
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full sm:w-auto p-2.5 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-700 bg-gray-50 cursor-pointer"
+                title="Start Date"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-bold uppercase">To</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full sm:w-auto p-2.5 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-700 bg-gray-50 cursor-pointer"
+                title="End Date"
+              />
+            </div>
+          </div>
 
           {/* Branch Filter (Admins Only) */}
           {isAdmin && (
             <select 
               value={filterBranchId}
               onChange={(e) => setFilterBranchId(e.target.value)}
-              className="w-full md:w-auto p-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-gray-50 cursor-pointer"
+              className="w-full sm:w-auto p-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-gray-50 cursor-pointer"
             >
               <option value="">All Branches</option>
               {branches.map(branch => (
@@ -149,7 +167,7 @@ const SalesPayments: React.FC = () => {
           )}
 
           {/* Customer Search Input*/}
-          <div className="relative w-full md:w-72 shrink-0">
+          <div className="relative w-full sm:w-72 flex-grow sm:flex-grow-0">
             <input 
               type="text" 
               placeholder="Search customer name..." 
@@ -192,7 +210,7 @@ const SalesPayments: React.FC = () => {
                 {payments.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-gray-400 font-medium">
-                      {(searchCustomer || filterDate || filterBranchId) 
+                      {(searchCustomer || startDate || endDate || filterBranchId) 
                         ? 'No matching payments found for the selected filters.' 
                         : 'No payment records available.'}
                     </td>
@@ -208,7 +226,7 @@ const SalesPayments: React.FC = () => {
                           {payment.reference_code || `#PAY-${String(payment.id).padStart(5, '0')}`}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {payment.created_at ? new Date(payment.created_at).toLocaleString() : 'N/A'}
+                          {payment.formatted_date ? new Date(payment.formatted_date).toLocaleString() : 'N/A'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
