@@ -7,13 +7,13 @@ from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer,
                            RemoveStockSerializer, PurchaseOrderCreateSerializer, InventoryBatchSerializer,
                            SupplierSerializer, PurchaseOrderListSerializer, PurchaseOrderDetailSerializer,
-                           PaySupplierCreditSerializer, SupplierLedgerSerializer)
+                           PaySupplierCreditSerializer, SupplierLedgerSerializer, UpdateBatchExpirySerializer)
 from .services import (receive_stock_service, create_product_service, 
                        create_category_service, accept_transfer_service, initiate_transfer_service,
                        reject_transfer_service, update_product_price_service, remove_stock_service,
                        remove_category_service, create_purchase_order_service, create_supplier_service,
                        update_supplier_service, delete_supplier_service, pay_supplier_credit_service, 
-                       cancel_purchase_order_service)
+                       cancel_purchase_order_service, update_batch_expiry_service)
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories,
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
                         get_product_price_history, get_organization_stock_levels, get_inventory_batches,
@@ -103,6 +103,38 @@ class ExpiringStockApi(views.APIView):
         } for b in batches]
         
         return Response(data)
+
+
+class UpdateBatchExpiryApi(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, batch_id):
+        # 🔒 Strict Security: Only Admins or Managers can change prices
+        if request.user.role not in ['Admin','Tenant_Admin', 'Super_Admin', 'Manager']:
+            return Response(
+                {"error": "You do not have permission to change expiry dates."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = UpdateBatchExpirySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            batch = update_batch_expiry_service(
+                user=request.user,
+                batch_id=batch_id,
+                new_expiry_date=serializer.validated_data['new_expiry_date']
+            )
+
+            return Response({
+                "message": "Expiry Date updated successfully.",
+                "batch_id": batch.id,
+                "new_expiry_date": batch.expiry_date
+            }, status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class ProductCreateApi(views.APIView):

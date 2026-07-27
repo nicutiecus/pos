@@ -140,6 +140,8 @@ class StockTransferLogSerializer(serializers.ModelSerializer):
             'quantity', 'transferred_by_email', 'notes', 'formatted_date', 'status'
         ]
 
+class UpdateBatchExpirySerializer(serializers.Serializer):
+    new_expiry_date = serializers.DateField(allow_null=True, required=False)
 
 
 class UpdateProductPriceSerializer(serializers.Serializer):

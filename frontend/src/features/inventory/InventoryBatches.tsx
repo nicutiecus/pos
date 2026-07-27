@@ -8,9 +8,9 @@ export interface InventoryBatch {
   product_name: string;
   branch_name: string;
   initial_quantity: number;
-  quantity_on_hand: number; // Updated key
-  cost_price_at_receipt: number | string; // Added key
-  created_at: string; // Updated key
+  quantity_on_hand: number;
+  cost_price_at_receipt: number | string;
+  created_at: string;
   expiry_date: string | null;
   supplier_name?: string;
 }
@@ -19,10 +19,16 @@ const InventoryBatches: React.FC = () => {
   const [batches, setBatches] = useState<InventoryBatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'VALID' | 'EXPIRING_SOON' | 'EXPIRED'>('ALL');
+
+  // Edit State
+  const [editingBatchId, setEditingBatchId] = useState<string | number | null>(null);
+  const [editExpiryDate, setEditExpiryDate] = useState<string>('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     const fetchBatches = async () => {
@@ -41,6 +47,45 @@ const InventoryBatches: React.FC = () => {
 
     fetchBatches();
   }, []);
+
+  // --- Handlers ---
+  const handleUpdateExpiry = async (batchId: string | number) => {
+    setIsUpdating(true);
+    setError(null); // Clear previous errors
+    setSuccessMessage(null);
+    try {
+      // Send PATCH request to update only the expiry date
+      await api.patch(`/inventory/batches/${batchId}/`, {
+        new_expiry_date: editExpiryDate || null, 
+      });
+
+      // Update local state so UI reflects changes immediately without a full re-fetch
+      setBatches(prevBatches => 
+        prevBatches.map(batch => 
+          batch.id === batchId 
+            ? { ...batch, expiry_date: editExpiryDate || null } 
+            : batch
+        )
+      );
+      
+      setEditingBatchId(null);
+      setEditExpiryDate('');
+
+      // Set the success message
+      setSuccessMessage("Expiry date updated successfully!");
+      
+      // Auto-hide the success message after 3 seconds
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+      
+    } catch (err: any) {
+      console.error("Failed to update expiry date:", err);
+      setError(err.response?.data?.message || "Failed to update expiry date.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   // --- Helper to determine expiry status dynamically ---
   const getExpiryStatus = (expiryDate: string | null) => {
@@ -106,10 +151,22 @@ const InventoryBatches: React.FC = () => {
           />
         </div>
       </div>
+      {successMessage && (
+        <div className="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-sm animate-fade-in-up">
+          <p className="font-bold flex justify-between items-center">
+            Success
+            <button onClick={() => setSuccessMessage(null)} className="text-green-700 hover:text-green-900 text-lg leading-none">&times;</button>
+          </p>
+          <p className="text-sm">{successMessage}</p>
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm">
-          <p className="font-bold">Error</p>
+          <p className="font-bold flex justify-between">
+            Error
+            <button onClick={() => setError(null)} className="text-red-700 hover:text-red-900">&times;</button>
+          </p>
           <p className="text-sm">{error}</p>
         </div>
       )}
@@ -144,7 +201,7 @@ const InventoryBatches: React.FC = () => {
                 ) : (
                   filteredBatches.map((batch) => {
                     const status = getExpiryStatus(batch.expiry_date);
-                    const isDepleted = batch.quantity_on_hand <= 0; // Updated to use quantity_on_hand
+                    const isDepleted = batch.quantity_on_hand <= 0;
 
                     return (
                       <tr key={batch.id} className={`hover:bg-blue-50/50 transition-colors ${isDepleted ? 'opacity-60 bg-gray-50' : ''}`}>
@@ -169,12 +226,49 @@ const InventoryBatches: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                           <div>
                             <span className="text-gray-400 text-xs uppercase font-bold mr-1">Rcvd:</span> 
-                            {/* Updated to created_at */}
                             {batch.created_at ? new Date(batch.created_at).toLocaleDateString() : 'Unknown'}
                           </div>
-                          {batch.expiry_date && (
-                            <div><span className="text-gray-400 text-xs uppercase font-bold mr-1">Exp:</span> {new Date(batch.expiry_date).toLocaleDateString()}</div>
-                          )}
+                          
+                          {/* UPDATED DATES COLUMN WITH EDIT FUNCTIONALITY */}
+                          <div className="mt-1 flex items-center h-6">
+                            <span className="text-gray-400 text-xs uppercase font-bold mr-1">Exp:</span>
+                            
+                            {editingBatchId === batch.id ? (
+                              <div className="flex items-center gap-1 animate-fade-in">
+                                <input
+                                  type="date"
+                                  value={editExpiryDate}
+                                  onChange={(e) => setEditExpiryDate(e.target.value)}
+                                  className="border border-gray-300 rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                                />
+                                <button
+                                  onClick={() => handleUpdateExpiry(batch.id)}
+                                  disabled={isUpdating}
+                                  className="text-white bg-green-500 hover:bg-green-600 rounded px-2 py-0.5 text-[10px] font-bold disabled:opacity-50 transition-colors shadow-sm"
+                                >
+                                  {isUpdating ? '...' : 'Save'}
+                                </button>
+                                <button
+                                  onClick={() => setEditingBatchId(null)}
+                                  disabled={isUpdating}
+                                  className="text-gray-600 bg-gray-200 hover:bg-gray-300 rounded px-2 py-0.5 text-[10px] font-bold transition-colors"
+                                >
+                                  X
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 group cursor-pointer" onClick={() => {
+                                setEditingBatchId(batch.id);
+                                // Ensure standard YYYY-MM-DD formatting for HTML input
+                                setEditExpiryDate(batch.expiry_date ? batch.expiry_date.split('T')[0] : '');
+                              }}>
+                                <span>{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : 'None'}</span>
+                                <span className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="Edit Expiry Date">
+                                  ✏️
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <span className={`px-3 py-1 text-xs font-bold rounded-full ${status.color}`}>

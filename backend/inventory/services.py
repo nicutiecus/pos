@@ -89,7 +89,7 @@ def create_purchase_order_service(
     return purchase_order
 
 def cancel_purchase_order_service(*, user, purchase_order_id):
-    # 1. Find the category and ensure it belongs to this tenant
+    # 1. Find the purchase order and ensure it belongs to this tenant
     purchase_order = PurchaseOrder.objects.filter(id=purchase_order_id, tenant=user.tenant).first()
     if not purchase_order:
         raise ValidationError("Purchase Order not found or you do not have permission to delete it.")
@@ -488,7 +488,28 @@ def update_product_price_service(*, user, product_id: str, new_price) -> Product
     return product
 
 
+    
+def update_batch_expiry_service(*, user, batch_id: str, new_expiry_date) -> InventoryBatch:
+    # Fetch the batch, ensuring it belongs to this user's tenant
+    batch = InventoryBatch.objects.filter(id=batch_id, tenant=user.tenant).first()
+    
+    if not batch:
+        raise ValidationError("Inventory Batch not found.")
 
+    
+    old_expiry_date = batch.expiry_date 
+
+    if old_expiry_date==new_expiry_date:
+        return batch
+# Wrap in a transaction so both the update and the log (if it exists) succeed together
+    with transaction.atomic():
+        # 1. Update the Batch
+        batch.expiry_date = new_expiry_date
+        batch.save(update_fields=['expiry_date', 'updated_at'])
+
+        
+
+    return batch
 
 @transaction.atomic
 def remove_stock_service(*, user, product_id, branch_id, quantity, reason, notes=""):
