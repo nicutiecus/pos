@@ -5,12 +5,14 @@ from .apis import (StockReceiveApi, StockLevelApi, InventoryLogListApi,
                    UpdateProductPriceApi, ProductPriceHistoryApi, OrganizationStockLevelsAPIView,
                    RemoveStockAPIView, InventoryBatchListAPIView, CategoryDeleteApi, PurchaseOrderCreateApi,
                    PurchaseOrderListApi, SupplierListCreateApi, SupplierDetailApi, PurchaseOrderDetailApi,
-                   PaySupplierCreditApi, SupplierLedgerApi)
+                   PaySupplierCreditApi, SupplierLedgerApi, CancelPurchaseOrderView)
 
 urlpatterns = [
     path('purchase-orders/',PurchaseOrderListApi.as_view(), name='cpurchase-order-list'),
     path('purchase-orders/create',PurchaseOrderCreateApi.as_view(), name='create-purchase-order'),
     path('purchase-orders/<str:po_id>/', PurchaseOrderDetailApi.as_view(), name='purchase-order-detail'),
+    path('purchase-orders/<str:purchase_order_id>/cancel/', CancelPurchaseOrderView.as_view(), 
+        name='purchase-order-cancel'),
     path('suppliers/', SupplierListCreateApi.as_view(), name='suppliers'),
     path('suppliers/<str:supplier_id>/ledger/', SupplierLedgerApi.as_view(), name='supplier-ledger'),
     path('suppliers/<str:supplier_id>/', SupplierDetailApi.as_view(), name='supplier-detail'),

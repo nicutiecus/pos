@@ -1,7 +1,7 @@
 from django.db.models import Sum, F, Q, DecimalField
 from django.utils import timezone
 from .models import (InventoryBatch, Product, Category, StockTransferLog, ProductPriceHistory, InventoryLog, Supplier,
-                     PurchaseOrder, SupplierPayment, SupplierLedger)
+                     PurchaseOrder, SupplierPayment, SupplierLedger, PurchaseInvoice)
 from django.core.exceptions import PermissionDenied
 from django.core.cache import cache
 from .serializers import ProductCatalogSerializer # We use the serializer here now
@@ -243,11 +243,49 @@ def get_inventory_batches(*, user, branch_id=None, active_only=True):
     # Sort by nearest expiry date first, then by creation date
     return query.order_by('expiry_date', 'created_at')
 
-def get_suppliers(*, user):
+def get_suppliers(*, user, branch_id=None, search_query=None):
 
     query= Supplier.objects.filter(tenant= user.tenant)
 
-    return query.order_by('created_at')
+    # 2. Calculate Tenant-wide credit (using the current_debt field)
+    tenant_credit_agg = query.aggregate(total=Sum('current_debt'))
+    tenant_total_credit = tenant_credit_agg['total'] or Decimal('0.00')
+
+    # 3. Calculate Branch-specific credit
+    branch_total_credit = None
+    
+    # Enforce security: restrict to user's branch if they are not an admin
+    admin_roles = ['Admin', 'Tenant_Admin', 'Super_Admin']
+    if getattr(user, 'role', '') not in admin_roles and not user.is_superuser:
+        branch_id = user.branch_id
+
+    if branch_id:
+        branch_invoices = PurchaseInvoice.objects.filter(
+            tenant=user.tenant,
+            branch_id=branch_id,
+            status=PurchaseInvoice.InvoiceStatus.CONFIRMED 
+        )
+        
+        # Outstanding amount = total_amount - amount_paid
+        branch_credit_agg = branch_invoices.aggregate(
+            total_outstanding=Sum(F('total_amount') - F('amount_paid'))
+        )
+        branch_total_credit = branch_credit_agg['total_outstanding'] or Decimal('0.00')
+
+    metrics = {
+        "tenant_total_credit": tenant_total_credit,
+        "branch_total_credit": branch_total_credit,
+        "branch_id": branch_id
+    }
+
+    if search_query:
+        query = query.filter(
+            Q(name__icontains=search_query) | 
+            Q(email__icontains=search_query) |
+            Q(phone__icontains=search_query)
+        )
+
+    return query.order_by('created_at'), metrics
 
 def get_purchase_orders(*, user, branch_id, search_query=None, status=None):
 

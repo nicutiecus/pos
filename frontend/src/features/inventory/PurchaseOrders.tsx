@@ -46,6 +46,7 @@ const PurchaseOrders: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   // Create Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -135,7 +136,18 @@ const PurchaseOrders: React.FC = () => {
       setIsDetailsLoading(false);
     }
   };
-
+  
+  const handleCancel = async (id: string) => {
+    if (!window.confirm(`Are you sure you want to cancel this order? This action cannot be undone.`)) return;
+    
+    try {
+      await api.post(`/inventory/purchase-orders/${id}/cancel/`);
+      setMessage({ type: 'success', text: 'Purchase Order Cancelled' });
+      fetchOrders();
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Cannot delete Purchase Order' });
+    }
+  };
   // NEW: Close the details modal
   const closeDetailsModal = () => {
     setViewingPOId(null);
@@ -200,6 +212,13 @@ const PurchaseOrders: React.FC = () => {
         <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm">
           <p className="font-bold">Error</p>
           <p className="text-sm">{error}</p>
+        </div>
+      )}
+
+      {message && (
+        <div className={`mb-4 p-4 rounded-lg text-sm font-medium ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {message.text}
+          <button onClick={() => setMessage(null)} className="float-right font-bold">&times;</button>
         </div>
       )}
       {/* TABLE SECTION */}
@@ -393,6 +412,18 @@ const PurchaseOrders: React.FC = () => {
 
             {/* Details Footer */}
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+              {poDetails?.status === 'Draft' && (
+              <button 
+                onClick={() => {    if (viewingPOId) {
+                  handleCancel(viewingPOId);
+                  closeDetailsModal(); // Close modal after cancelling
+                }
+                  }}
+                  className="bg-red-200 hover:bg-red-300 text-red-800 px-6 py-2 rounded-lg font-bold transition-colors"
+                >
+                Cancel Order
+              </button>
+              )}
               <button 
                 onClick={closeDetailsModal}
                 className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg font-bold transition-colors"

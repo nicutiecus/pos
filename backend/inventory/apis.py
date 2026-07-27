@@ -12,18 +12,18 @@ from .services import (receive_stock_service, create_product_service,
                        create_category_service, accept_transfer_service, initiate_transfer_service,
                        reject_transfer_service, update_product_price_service, remove_stock_service,
                        remove_category_service, create_purchase_order_service, create_supplier_service,
-                       update_supplier_service, delete_supplier_service, pay_supplier_credit_service)
-from .selectors import (get_stock_levels, get_expiring_batches, get_categories, 
+                       update_supplier_service, delete_supplier_service, pay_supplier_credit_service, 
+                       cancel_purchase_order_service)
+from .selectors import (get_stock_levels, get_expiring_batches, get_categories,
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
                         get_product_price_history, get_organization_stock_levels, get_inventory_batches,
                         get_suppliers, get_purchase_orders, get_supplier_payments, get_supplier_ledger
                         )
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.core.exceptions import PermissionDenied, ValidationError
 from .models import StockTransferLog, Supplier, PurchaseOrder
-
-
 from rest_framework.views import APIView
-
 from django.db.models import ProtectedError
 from common.pagination import StandardResultsSetPagination
 
@@ -459,14 +459,48 @@ class PurchaseOrderListApi(views.APIView):
         
         return paginator.get_paginated_response(serializer.data)
 
+class CancelPurchaseOrderView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, purchase_order_id):
+        """
+        POST /api/purchase-orders/<purchase_order_id>/cancel/
+        """
+        try:
+            cancel_purchase_order_service(
+                user=request.user, 
+                purchase_order_id=purchase_order_id
+            )
+            return Response(
+                {"detail": "Purchase order cancelled successfully."}, 
+                status=status.HTTP_200_OK
+            )
+            
+        except (DjangoValidationError, DRFValidationError) as e:
+            return Response(
+                {"detail": str(e.message if hasattr(e, 'message') else e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
 class SupplierListCreateApi(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        suppliers = get_suppliers(user=request.user)
-        # We can reuse the serializer for output formatting
-        data = SupplierSerializer(suppliers, many=True).data
-        return Response(data)
+
+        branch_id= request.query_params.get('branch_id')
+        search_query = request.query_params.get('search')
+
+        suppliers, metrics = get_suppliers(user=request.user, branch_id=branch_id,
+                                           search_query=search_query)
+        
+        # Serialize the list of suppliers
+        suppliers_data = SupplierSerializer(suppliers, many=True).data
+        
+        # Return a combined dictionary response
+        return Response({
+            "metrics": metrics,
+            "suppliers": suppliers_data
+        }, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = SupplierSerializer(data=request.data, context={'request': request})

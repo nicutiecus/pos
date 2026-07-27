@@ -88,6 +88,18 @@ def create_purchase_order_service(
 
     return purchase_order
 
+def cancel_purchase_order_service(*, user, purchase_order_id):
+    # 1. Find the category and ensure it belongs to this tenant
+    purchase_order = PurchaseOrder.objects.filter(id=purchase_order_id, tenant=user.tenant).first()
+    if not purchase_order:
+        raise ValidationError("Purchase Order not found or you do not have permission to delete it.")
+    else:
+        purchase_order.status= PurchaseOrder.OrderStatus.CANCELED
+        purchase_order.save(update_fields=['status'])
+
+    return True
+
+
 def receive_stock_service(
     *, 
     user, 
@@ -279,7 +291,7 @@ def remove_category_service(*, user, category_id: int):
     
     if has_linked_products:
         raise ValidationError(
-            "Cannot delete this category because it contains active products. "
+            "Cannot delete this category because  it contains active products. "
             "Please reassign or delete the products first."
         )
 
