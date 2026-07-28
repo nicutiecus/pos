@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../api/axiosInstance';
-import CreatePOModal from './CreatePOModal'; // Adjust import path as needed
+import CreatePOModal from './CreatePOModal'; 
 
 // --- Interfaces ---
 interface PurchaseOrder {
@@ -13,7 +13,6 @@ interface PurchaseOrder {
   created_at: string;
 }
 
-// NEW: Interfaces for the detailed view
 interface POItemDetail {
   product_id: string;
   product_name: string;
@@ -34,34 +33,32 @@ interface Branch {
 }
 
 const PurchaseOrders: React.FC = () => {
-
-  const userRole = localStorage.getItem('userRole')
+  const userRole = localStorage.getItem('userRole');
   const localBranchId = localStorage.getItem('branchId');
   const isAdmin = userRole === 'Tenant_Admin' || userRole === 'ADMIN';
   const [filterBranchId, setFilterBranchId] = useState<string | number>(isAdmin ? '' : (localBranchId || ''));
 
-  const [branches, setBranches] = useState<Branch[]>([])
+  const [branches, setBranches] = useState<Branch[]>([]);
   
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  
   // Create Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // NEW: Details Modal State
+  // Details Modal State
   const [viewingPOId, setViewingPOId] = useState<string | null>(null);
   const [poDetails, setPoDetails] = useState<PurchaseOrderDetail | null>(null);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
 
-   // --- Pagination & Search State ---
-    const [currentPage, setCurrentPage] = useState(1);
-    const [hasNext, setHasNext] = useState(false);
-    const [hasPrev, setHasPrev] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-
-
+  // --- Pagination & Search State ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrev, setHasPrev] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // 1. Fetch Branches (Admins Only)
   useEffect(() => {
@@ -78,17 +75,19 @@ const PurchaseOrders: React.FC = () => {
     }
   }, [isAdmin]);
 
-  const fetchOrders = async () => {
+  // FIX: Wrapped in useCallback to stabilize the reference and satisfy ESLint rules safely
+  const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`/inventory/purchase-orders/`,{
+      const response = await api.get(`/inventory/purchase-orders/`, {
         params: { 
           page: currentPage, 
           search: searchTerm,
-          branch_id: filterBranchId || undefined // Pass branch_id for filtering
-      }});
+          branch_id: filterBranchId || undefined 
+        }
+      });
 
-      const data = response.data
+      const data = response.data;
       const fetchedOrders = data.results ? data.results : (Array.isArray(data) ? data : []);
 
       setHasNext(!!data.next);
@@ -100,7 +99,7 @@ const PurchaseOrders: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, searchTerm, filterBranchId]);
 
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
@@ -108,24 +107,22 @@ const PurchaseOrders: React.FC = () => {
     }, 500); 
 
     return () => clearTimeout(delayDebounce);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, currentPage, filterBranchId]);
+  }, [fetchOrders]); // FIX: Replaced individual dependencies with the memoized function
 
   const handleModalSuccess = () => {
     setIsModalOpen(false);
     fetchOrders(); 
   };
-  //  Reset to page 1 ONLY when the search term or branch filter changes
-    useEffect(() => {
-      setCurrentPage(1);
-    }, [searchTerm, filterBranchId]);
-  
 
-  // NEW: Fetch PO Details when a row is clicked
+  // Reset to page 1 ONLY when the search term or branch filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterBranchId]);
+  
   const handleRowClick = async (id: string) => {
     setViewingPOId(id);
     setIsDetailsLoading(true);
-    setPoDetails(null); // Reset previous details
+    setPoDetails(null); 
 
     try {
       const response = await api.get(`/inventory/purchase-orders/${id}/`);
@@ -138,17 +135,22 @@ const PurchaseOrders: React.FC = () => {
   };
   
   const handleCancel = async (id: string) => {
-    if (!window.confirm(`Are you sure you want to cancel this order? This action cannot be undone.`)) return;
+    if (!window.confirm(`Are you sure you want to cancel this order? This action cannot be undone.`)) {
+      return false; // Return a boolean to allow the caller to know if it was cancelled
+    }
     
     try {
       await api.post(`/inventory/purchase-orders/${id}/cancel/`);
       setMessage({ type: 'success', text: 'Purchase Order Cancelled' });
       fetchOrders();
+      return true;
     } catch (err) {
-      setMessage({ type: 'error', text: 'Cannot delete Purchase Order' });
+      // FIX: Changed "delete" to "cancel" to match the action
+      setMessage({ type: 'error', text: 'Cannot cancel Purchase Order' });
+      return false;
     }
   };
-  // NEW: Close the details modal
+
   const closeDetailsModal = () => {
     setViewingPOId(null);
     setPoDetails(null);
@@ -176,7 +178,6 @@ const PurchaseOrders: React.FC = () => {
         </div>
         
         <div className="flex w-full md:w-auto gap-3">
-          {/* Branch Filter (Admins Only) */}
           {isAdmin && (
             <select 
               value={filterBranchId}
@@ -208,6 +209,7 @@ const PurchaseOrders: React.FC = () => {
           </button>
         </div>
       </div>
+
       {error && (
         <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm">
           <p className="font-bold">Error</p>
@@ -221,6 +223,7 @@ const PurchaseOrders: React.FC = () => {
           <button onClick={() => setMessage(null)} className="float-right font-bold">&times;</button>
         </div>
       )}
+
       {/* TABLE SECTION */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
@@ -245,7 +248,6 @@ const PurchaseOrders: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {orders.map((po) => (
-                  // NEW: Added onClick handler to the row
                   <tr 
                     key={po.id} 
                     onClick={() => handleRowClick(po.id)}
@@ -302,7 +304,7 @@ const PurchaseOrders: React.FC = () => {
         onSuccess={handleModalSuccess} 
       />
 
-      {/* NEW: PO DETAILS MODAL */}
+      {/* PO DETAILS MODAL */}
       {viewingPOId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
@@ -411,16 +413,21 @@ const PurchaseOrders: React.FC = () => {
             </div>
 
             {/* Details Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+            {/* FIX: Added gap-3 spacing utility to prevent button squishing */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
               {poDetails?.status === 'Draft' && (
               <button 
-                onClick={() => {    if (viewingPOId) {
-                  handleCancel(viewingPOId);
-                  closeDetailsModal(); // Close modal after cancelling
-                }
-                  }}
-                  className="bg-red-200 hover:bg-red-300 text-red-800 px-6 py-2 rounded-lg font-bold transition-colors"
-                >
+                // FIX: Added await to the async function before closing the modal
+                onClick={async () => {
+                  if (viewingPOId) {
+                    const isSuccess = await handleCancel(viewingPOId);
+                    if (isSuccess) {
+                      closeDetailsModal();
+                    }
+                  }
+                }}
+                className="bg-red-200 hover:bg-red-300 text-red-800 px-6 py-2 rounded-lg font-bold transition-colors"
+              >
                 Cancel Order
               </button>
               )}

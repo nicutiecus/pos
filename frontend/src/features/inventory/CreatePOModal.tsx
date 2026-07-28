@@ -53,7 +53,7 @@ const CreatePOModal: React.FC<CreatePOModalProps> = ({ isOpen, onClose, onSucces
 
         const [prodRes, suppRes, branchRes] = await Promise.all(promises);
         setProducts(prodRes.data);
-        setSuppliers(suppRes.data.results || suppRes.data);
+        setSuppliers(suppRes.data.suppliers || suppRes.data);
         if (isAdmin && branchRes) setBranches(branchRes.data.results || branchRes.data);
       } catch (err) {
         console.error("Failed to load form data", err);
