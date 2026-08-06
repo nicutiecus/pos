@@ -24,7 +24,6 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.core.exceptions import PermissionDenied, ValidationError
 from .models import StockTransferLog, Supplier, PurchaseOrder
 from rest_framework.views import APIView
-from django.db.models import ProtectedError
 from common.pagination import StandardResultsSetPagination
 
 

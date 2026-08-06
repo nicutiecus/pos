@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import Expense
 from common.pagination import StandardResultsSetPagination
 from .selectors import get_expenses
+
 class ExpenseCreateSerializer(serializers.Serializer):
     scope = serializers.ChoiceField(choices=Expense.ExpenseScope.choices, default=Expense.ExpenseScope.BRANCH)
     
