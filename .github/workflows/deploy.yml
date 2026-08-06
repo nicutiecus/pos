@@ -52,7 +52,7 @@ jobs:
           CELERY_BROKER_URL: redis://localhost:6379/0
           SECRET_KEY: "temporary-test-key"
         run: |
-          python manage.py test
+          python backend/manage.py test
 
   deploy:
     name: Deploy to Production Server
