@@ -1,42 +1,54 @@
 import React, { useState } from 'react';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { decreaseQuantity, addToCart, clearCart } from '../../store/slices/cartSlice';
-import PaymentModal from './PaymentModal'; // We will build this next
+import PaymentModal from './PaymentModal';
 
-const CartSidebar: React.FC = () => {
+// Add the interface to accept the onClose prop from POSMain
+interface CartSidebarProps {
+  onClose: () => void;
+}
+
+const CartSidebar: React.FC<CartSidebarProps> = ({ onClose }) => {
   const dispatch = useAppDispatch();
   const { items, totalAmount } = useAppSelector((state) => state.cart);
   const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
-  // --- New Discount State ---
   const [discount, setDiscount] = useState<number | ''>('');
 
-  // Helper to re-add item (increase qty)
   const increaseQty = (item: any) => {
-    dispatch(addToCart({ ...item })); // Re-dispatching adds 1
+    dispatch(addToCart({ ...item }));
   };
 
   const handleClearCart = () => {
       dispatch(clearCart());
-      setDiscount(''); // Reset discount when cart is cleared
+      setDiscount('');
   };
-  // --- Calculate Final Total ---
+
   const safeDiscount = Number(discount) || 0;
-  // Ensure the discount doesn't make the total negative
   const finalTotal = Math.max(0, totalAmount - safeDiscount);
 
   return (
     <>
-      <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl w-96 flex-shrink-0">
+      <div className="flex flex-col h-full bg-white h-full flex-shrink-0">
         
         {/* Header */}
-        <div className="p-5 bg-gray-900 text-white flex justify-between items-center">
+        <div className="p-5 bg-gray-900 text-white flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-xl font-bold">Current Order</h2>
             <p className="text-xs text-gray-400">Order #{Date.now().toString().slice(-6)}</p>
           </div>
-          <button onClick={handleClearCart} className="text-xs text-red-300 hover:text-white underline">
-            Clear
-          </button>
+          <div className="flex items-center gap-4">
+            <button onClick={handleClearCart} className="text-xs text-red-300 hover:text-white underline transition-colors">
+              Clear
+            </button>
+            {/* Mobile Close Button */}
+            <button 
+              onClick={onClose} 
+              className="lg:hidden text-gray-400 hover:text-white font-bold text-xl leading-none transition-colors"
+              aria-label="Close cart"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* List */}
@@ -49,13 +61,13 @@ const CartSidebar: React.FC = () => {
           ) : (
             items.map((item) => (
               <div key={item.id} className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-800 text-sm truncate w-40">{item.name}</h4>
+                <div className="flex-1 min-w-0 mr-3">
+                  <h4 className="font-semibold text-gray-800 text-sm truncate">{item.name}</h4>
                   <div className="text-xs text-gray-500 font-mono">₦{item.price.toLocaleString()}</div>
                 </div>
                 
                 {/* Quantity Controls */}
-                <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <div className="flex items-center bg-gray-100 rounded-lg p-1 shrink-0">
                    <button onClick={() => dispatch(decreaseQuantity(item.id))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 hover:bg-gray-200 font-bold">-</button>
                    <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
                    <button onClick={() => increaseQty(item)} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-blue-600 hover:bg-blue-50 font-bold">+</button>
@@ -66,15 +78,14 @@ const CartSidebar: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-white border-t border-gray-200">
+        <div className="p-6 bg-white border-t border-gray-200 shrink-0">
           <div className="space-y-2 mb-6">
             <div className="flex justify-between text-gray-500 text-sm">
               <span>Subtotal</span>
               <span>₦{totalAmount.toLocaleString()}</span>
             </div>
             
-          
-          {/* --- NEW DISCOUNT INPUT --- */}
+            {/* Discount Input */}
             <div className="flex justify-between items-center text-gray-600 text-sm border-b border-gray-100 pb-3">
               <span className="font-medium">Discount (₦)</span>
               <input 
@@ -93,8 +104,6 @@ const CartSidebar: React.FC = () => {
               <span>₦{finalTotal.toLocaleString()}</span>
             </div>
           </div>
-
-          
           
           <button 
             disabled={items.length === 0}

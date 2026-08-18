@@ -2,12 +2,9 @@ import React, { useEffect, useState } from 'react';
 import api from '../../api/axiosInstance';
 import { useAppDispatch } from '../../store/hooks';
 import { addToCart } from '../../store/slices/cartSlice';
-// Import your new offline DB utilities
 import { saveProductsLocally, getLocalProducts } from '../../utils/offlineDb';
 
 // --- Interfaces ---
-
-// 1. Static Data (From /inventory/catalog)
 interface CatalogItem {
   id: number;
   name: string;
@@ -17,13 +14,11 @@ interface CatalogItem {
   image?: string;
 }
 
-// 2. Dynamic Data (From /inventory/levels/{branch_id}/)
 interface StockItem {
   id: number;
   total_quantity: number;
 }
 
-// 3. Merged Data (What the Grid displays)
 export interface Product extends CatalogItem {
   available_qty: number;
 }
@@ -33,8 +28,6 @@ const ProductGrid: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  
-  // New state to track if we are running from the local cache
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   
   const branchId = localStorage.getItem('branchId');
@@ -45,13 +38,11 @@ const ProductGrid: React.FC = () => {
       try {
         if (!branchId) throw new Error("Branch ID missing");
 
-        // 1. Attempt to fetch fresh data from the server
         const [catalogRes, stockRes] = await Promise.all([
           api.get('/inventory/catalog/'),
           api.get(`/inventory/levels/${branchId}/`)
         ]);
 
-        // 2. Merge logic
         const catalogItems: CatalogItem[] = catalogRes.data;
         const stockItems: StockItem[] = stockRes.data;
 
@@ -63,30 +54,27 @@ const ProductGrid: React.FC = () => {
           };
         });
 
-        // 3. Update UI and reset offline flag
         setProducts(mergedProducts);
         setIsOfflineMode(false);
 
-        // 4. Save the fresh merged data to IndexedDB for future offline use
         try {
             await saveProductsLocally(mergedProducts);
-        } catch (dbErr: any) { // FIX: Added explicit 'any' type
+        } catch (dbErr: any) { 
             console.error("Failed to cache products to IndexedDB:", dbErr);
         }
 
       } catch (err: any) {
         console.error("Network request failed, falling back to local DB...", err);
         
-        // --- OFFLINE FALLBACK LOGIC ---
         try {
             const localData = await getLocalProducts();
             if (localData && localData.length > 0) {
                 setProducts(localData);
-                setIsOfflineMode(true); // Trigger the offline UI banner
+                setIsOfflineMode(true); 
             } else {
                 console.error("No local data found. System cannot operate offline yet.");
             }
-        } catch (fallbackErr: any) { // FIX: Added explicit 'any' type
+        } catch (fallbackErr: any) { 
             console.error("Failed to retrieve from local DB:", fallbackErr);
         }
 
@@ -150,7 +138,6 @@ const ProductGrid: React.FC = () => {
                           name: product.name,
                           price: Number(product.selling_price),
                           sku: product.sku
-                          // FIX: Removed 'quantity: 1' to satisfy the Omit<CartItem, "quantity"> Redux constraint
                       }));
                   }
                 }}
@@ -161,21 +148,28 @@ const ProductGrid: React.FC = () => {
                     : 'bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed'
                 }`}
               >
-                <div className="flex justify-between items-start w-full mb-2">
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{product.sku}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${product.available_qty > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {/* SKU and Quantity Row */}
+                <div className="flex justify-between items-start w-full mb-2 gap-2">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
+                    {product.sku}
+                  </span>
+                  <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${product.available_qty > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                      {product.available_qty}
                   </span>
                 </div>
                 
-                <h3 className="font-bold text-gray-800 text-lg leading-tight mb-auto line-clamp-2">{product.name}</h3>
+                {/* Product Name with text wrapping and clamping */}
+                <h3 className="font-bold text-gray-800 text-base md:text-lg leading-tight mb-4 break-words line-clamp-2 w-full">
+                  {product.name}
+                </h3>
                 
-                <div className="mt-4 flex justify-between items-end w-full">
-                    <div className="text-xl font-bold text-blue-600">
+                {/* Price and Category Row */}
+                <div className="mt-auto flex justify-between items-end w-full gap-2">
+                    <div className="text-lg md:text-xl font-bold text-blue-600 truncate">
                       ₦{Number(product.selling_price).toLocaleString()}
                     </div>
                     {product.category && (
-                        <div className="text-[10px] text-gray-400 bg-gray-50 px-1 rounded">
+                        <div className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded truncate max-w-[40%]" title={product.category}>
                             {product.category}
                         </div>
                     )}
