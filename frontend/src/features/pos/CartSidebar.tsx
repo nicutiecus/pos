@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom'; // <-- Import createPortal
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { decreaseQuantity, addToCart, clearCart } from '../../store/slices/cartSlice';
 import PaymentModal from './PaymentModal';
 
-// Add the interface to accept the onClose prop from POSMain
 interface CartSidebarProps {
   onClose: () => void;
 }
@@ -115,13 +115,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({ onClose }) => {
         </div>
       </div>
 
-      {/* Payment Modal Popup */}
-      {isPaymentModalOpen && (
+      {/* Payment Modal Popup - Teleported to document.body to escape the CSS transform context */}
+      {isPaymentModalOpen && createPortal(
         <PaymentModal 
           total={totalAmount}
           discountAmount={safeDiscount}
           onClose={() => setPaymentModalOpen(false)} 
-        />
+        />,
+        document.body
       )}
     </>
   );
