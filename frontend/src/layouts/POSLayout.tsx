@@ -48,7 +48,30 @@ const POSLayout: React.FC = () => {
             <h1 className="text-xl font-bold tracking-tight">❄️ POS Terminal</h1>
 
 
-            
+            {/* --- KIOSK NAVIGATION CONTROLS --- */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleBack}
+                title="Go Back"
+                className="flex items-center px-3 py-1.5 bg-blue-900/80 hover:bg-blue-700 text-white rounded-md text-sm font-semibold transition-colors border border-blue-700 shadow-sm active:scale-95"
+              >
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back
+              </button>
+
+              <button
+                onClick={handleRefresh}
+                title="Refresh Page"
+                className="flex items-center px-3 py-1.5 bg-blue-900/80 hover:bg-blue-700 text-white rounded-md text-sm font-semibold transition-colors border border-blue-700 shadow-sm active:scale-95"
+              >
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+            </div>
             
             {/* Navigation Tabs */}
             <nav className="flex space-x-1 bg-blue-900 rounded-lg p-1">
