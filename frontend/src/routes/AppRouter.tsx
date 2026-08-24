@@ -58,6 +58,8 @@ import SalesPayments from '../features/manager-dash/SalesPayments';
 import SuperAdminDashboard from '../features/super-admin/SuperAdminDashboard';
 import SuperAdminLogin from '../features/super-admin/SuperAdminLogin';
 import SuperAdminLayout from '../layouts/SuperAdminLayout';
+// Manager
+import ManagerSalesOrders from '../features/manager-dash/ManagerSalesOrders';
 
 
 
@@ -156,6 +158,8 @@ const AppRouter: React.FC = () => {
     <Route path="inventory-batches" element={<InventoryBatches/>} />
      <Route path="inventory-logs" element={<InventoryLogs/>} />
      <Route path="inventory/remove" element={<StockRemoval/>}/>
+     <Route path="sales-orders" element={<ManagerSalesOrders/>}/>
+     <Route path ="sales-payments" element={<SalesPayments/>} />
 
     
     <Route path ="reports" element={<ReportsDashboard/>}/>

@@ -29,6 +29,15 @@ const POSLayout: React.FC = () => {
     }
   };
 
+  // Kiosk Navigation Handlers
+  const handleBack = () => {
+    navigate(-1); // Go back one step in React Router history
+  };
+
+  const handleRefresh = () => {
+    window.location.reload(); // Force reload the WebView
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100 overflow-hidden relative">
       {/* Top Navbar */}
@@ -37,6 +46,9 @@ const POSLayout: React.FC = () => {
           
           <div className="flex items-center space-x-6">
             <h1 className="text-xl font-bold tracking-tight">❄️ POS Terminal</h1>
+
+
+            
             
             {/* Navigation Tabs */}
             <nav className="flex space-x-1 bg-blue-900 rounded-lg p-1">
