@@ -1,9 +1,10 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from common.models import Branch
 from users.models import Tenant, User
 from users.permissions import IsSuperAdmin
-from .serializers import SuperAdminTenantSerializer # Import locally
+from .serializers import SuperAdminTenantSerializer, SuperAdminTenantBranchesSerializer
 from sales.models import Payment
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
@@ -14,12 +15,22 @@ from users.serializers import TenantTokenObtainPairSerializer
 
 
 
+
 class SuperAdminTenantListApi(APIView):
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
     def get(self, request):
         tenants = Tenant.objects.all().order_by('-created_at')
         serializer = SuperAdminTenantSerializer(tenants, many=True)
+        return Response(serializer.data)
+
+
+class SuperAdminTenantBranchesApi(APIView):
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request, tenant_id):
+        tenant_branches = Branch.objects.filter(tenant=tenant_id)
+        serializer = SuperAdminTenantBranchesSerializer(tenant_branches, many=True)
         return Response(serializer.data)
     
 class SuperAdminStatsApi(APIView):

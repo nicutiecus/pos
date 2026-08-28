@@ -1,5 +1,5 @@
 from django.urls import path
-from .apis import SuperAdminStatsApi, SuperAdminTenantListApi, ImpersonateTenantApi
+from .apis import SuperAdminStatsApi, SuperAdminTenantListApi, ImpersonateTenantApi, SuperAdminTenantBranchesApi
 
 urlpatterns = [
     # ... your existing user urls ...
@@ -7,5 +7,6 @@ urlpatterns = [
     path('tenants/', SuperAdminTenantListApi.as_view(), name='superadmin-tenants'),
     path('tenants/impersonate/<str:tenant_id>/', 
          ImpersonateTenantApi.as_view(), name='superadmin-impersonate'),
+    path('tenants/<str:tenant_id>/branches/', SuperAdminTenantBranchesApi.as_view(), name = 'superadmin-tenant-branches')
 
 ]

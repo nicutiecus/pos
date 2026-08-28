@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
-//import { useNavigate } from 'react-router-dom';
+import ImpersonationModal, { type Branch} from './ImpersonationModal';
 
 // --- Interfaces ---
 interface GlobalStats {
   total_tenants: number;
   active_tenants: number;
-  total_platform_revenue: number; // Sum of ALL sales across ALL tenants
+  total_platform_revenue: number; 
   total_users: number;
 }
 
@@ -20,24 +20,31 @@ interface Tenant {
   subscription_plan: string;
 }
 
+interface ModalState {
+  isOpen: boolean;
+  tenantId: string;
+  businessName: string;
+  branches: Branch[];
+  isLoadingBranches: boolean;
+}
+
 const SuperAdminDashboard: React.FC = () => {
-  //const navigate = useNavigate();
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isImpersonating, setIsImpersonating] = useState(false);
+  
+  // Impersonation Modal State
+  const [modalData, setModalData] = useState<ModalState | null>(null);
 
   useEffect(() => {
     const fetchSuperAdminData = async () => {
       try {
-        // NOTE: These endpoints must be strictly protected by Django's IsAdminUser/IsSuperUser permissions
         const [statsRes, tenantsRes] = await Promise.all([
           api.get('/super-admin/stats/'),
           api.get('/super-admin/tenants/')
         ]);
         
         setStats(statsRes.data);
-        // Handle paginated or flat array response
         setTenants(tenantsRes.data.results || tenantsRes.data);
       } catch (err) {
         console.error("Failed to load platform data", err);
@@ -50,46 +57,20 @@ const SuperAdminDashboard: React.FC = () => {
     fetchSuperAdminData();
   }, []);
 
-  // --- The Impersonation Engine ---
-  const handleImpersonate = async (tenantId: string, businessName: string) => {
-    if (!window.confirm(`Are you sure you want to login as the admin for ${businessName}?`)) return;
+  const openImpersonateModal = async (tenantId: string, businessName: string) => {
+    // Open modal immediately in a loading state
+    setModalData({ isOpen: true, tenantId, businessName, branches: [], isLoadingBranches: true });
     
-    setIsImpersonating(true);
     try {
-      // 1. Tell backend to generate a Tenant Admin token for this specific tenant
-      const res = await api.post(`/super-admin/tenants/impersonate/${tenantId}/`);
-
-      const newTenantToken = res.data.access;
-      //const newRefreshToken = res.data.refresh
+      // Fetch the branches belonging to this tenant for the selection UI
+      const res = await api.get(`/super-admin/tenants/${tenantId}/branches/`);
+      const fetchedBranches = res.data.results || res.data;
       
-      // 2. Save your current Super Admin token so you can return later
-      const currentSuperToken = localStorage.getItem('accessToken');
-      localStorage.setItem('superAdminBackupToken', currentSuperToken || '');
-
-      localStorage.setItem('accessToken', newTenantToken);
-
-      /*if (newRefreshToken) {
-          localStorage.setItem('refreshToken', newRefreshToken);
-      } else {
-          // Provide a dummy token so the frontend doesn't panic and boot you out
-          localStorage.setItem('refreshToken', 'impersonation_active_no_refresh');
-      }*/
-      
-      // 3. Swap in the new Tenant token
-      localStorage.setItem('userRole', 'Tenant_Admin');
-      localStorage.setItem('tenantId', tenantId);
-      localStorage.setItem('businessName', businessName);
-      localStorage.setItem('isImpersonating', 'true'); // Flag to show a "Return to Super Admin" banner
-
-      api.defaults.headers.common['Authorization'] = `Bearer ${newTenantToken}`;
-      
-      // 4. Redirect to the normal Tenant Admin dashboard
-      window.location.href = '/admin';
-      
+      setModalData(prev => prev ? { ...prev, branches: fetchedBranches, isLoadingBranches: false } : null);
     } catch (err) {
-      alert("Failed to initiate impersonation.");
-      console.error(err);
-      setIsImpersonating(false);
+      console.error("Failed to fetch branches for tenant", err);
+      // Leave modal open on failure so they can still select Tenant Admin
+      setModalData(prev => prev ? { ...prev, isLoadingBranches: false } : null);
     }
   };
 
@@ -109,8 +90,6 @@ const SuperAdminDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4">
-      
-      {/* HEADER */}
       <div className="bg-gray-900 p-6 rounded-xl shadow-lg border border-gray-800 text-white flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-black tracking-tight flex items-center gap-2">
@@ -123,7 +102,6 @@ const SuperAdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* GLOBAL KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Tenants</p>
@@ -143,7 +121,6 @@ const SuperAdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* TENANT MANAGEMENT TABLE */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="font-bold text-gray-800">Registered Tenants</h3>
@@ -186,17 +163,12 @@ const SuperAdminDashboard: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end gap-2">
-                      {/* IMPERSONATE BUTTON */}
                       <button 
-                        onClick={() => handleImpersonate(tenant.id, tenant.name)}
-                        disabled={isImpersonating}
+                        onClick={() => openImpersonateModal(tenant.id, tenant.name)}
                         className="bg-gray-900 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-black transition-colors"
-                        title="Login to their dashboard to fix errors"
                       >
                         🕵️‍♂️ Impersonate
                       </button>
-                      
-                      {/* SUSPEND/ACTIVATE BUTTON */}
                       <button 
                         onClick={() => handleToggleStatus(tenant.id, tenant.status)}
                         className={`px-3 py-1.5 rounded text-xs font-bold border ${
@@ -213,6 +185,17 @@ const SuperAdminDashboard: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {modalData && (
+        <ImpersonationModal
+          isOpen={modalData.isOpen}
+          tenantId={modalData.tenantId}
+          businessName={modalData.businessName}
+          branches={modalData.branches}
+          isLoadingBranches={modalData.isLoadingBranches}
+          onClose={() => setModalData(null)}
+        />
+      )}
     </div>
   );
 };
