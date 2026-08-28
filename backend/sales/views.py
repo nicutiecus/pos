@@ -52,7 +52,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 )), Decimal('0.00'))
             ).annotate(
                 # Branch Debt = (Total Branch Sales) - (Total Branch Payments + Returns)
-                calculated_branch_debt=F('branch_credit_sales') - F('branch_debt_payments')
+                calculated_branch_debt= F('branch_debt_payments') - F('branch_credit_sales')
             )
         else:
             # If an Admin views all branches at once, just fallback to global debt
