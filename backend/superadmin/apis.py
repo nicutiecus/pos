@@ -51,37 +51,53 @@ class SuperAdminStatsApi(APIView):
         })
 
 
-
-
 class ImpersonateTenantApi(APIView):
     """
     POST /api/super-admin/tenants/<tenant_id>/impersonate/
-    Allows a Super Admin to log in as the Tenant Admin of a specific tenant.
+    Allows a Super Admin to log in as the Tenant Admin of a specific tenant,
+    or optionally as a Branch Manager if a branch_id is provided in the request payload.
     """
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
     def post(self, request, tenant_id):
         # 1. Verify the tenant exists
         tenant = get_object_or_404(Tenant, id=tenant_id)
+        
+        # Extract optional branch_id from request body
+        branch_id = request.data.get('branch_id')
 
-        # 2. Find the primary admin for this tenant. 
-        # (Adjust 'Tenant_Admin' to exactly match your role string if different)
-        target_user = User.objects.filter(tenant=tenant, role='Tenant_Admin').first()
-
-        # Fallback: If no specific admin role is found, just grab the first user (likely the creator)
-        if not target_user:
-            target_user = User.objects.filter(tenant=tenant).first()
+        # 2. Determine target user based on branch provision
+        if branch_id:
+            # Look for a branch manager in the specified branch
+            target_user = User.objects.filter(
+                tenant=tenant,
+                branch_id=branch_id,
+                role='Branch_Manager'
+            ).first()
             
-        if not target_user:
-            return Response(
-                {"error": "This tenant has no users to impersonate yet."}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
+            if not target_user:
+                return Response(
+                    {"error": "No Branch Manager found for the specified branch."}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # Fallback to standard Tenant Admin impersonation
+            target_user = User.objects.filter(tenant=tenant, role='Tenant_Admin').first()
+            
+            # If no specific admin role is found, grab the first user
+            if not target_user:
+                target_user = User.objects.filter(tenant=tenant).first()
+                
+            if not target_user:
+                return Response(
+                    {"error": "This tenant has no users to impersonate yet."}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-        # 3. Manually mint a new token pair using your custom serializer
+        # 3. Manually mint a new token pair using the custom serializer
         refresh = TenantTokenObtainPairSerializer.get_token(target_user)
 
-        # 4. Return the exact same JSON structure as your standard Login API
+        # 4. Return the standard JSON structure
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
@@ -91,7 +107,6 @@ class ImpersonateTenantApi(APIView):
                 'role': target_user.role,
                 'first_name': target_user.first_name,
                 'tenant_id': str(tenant.id),
-                # If your target user belongs to a branch, include it safely
                 'branch_id': str(target_user.branch.id) if target_user.branch else None,
             }
         }, status=status.HTTP_200_OK)
