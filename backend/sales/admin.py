@@ -6,6 +6,8 @@ class CustomerLedgerInline(admin.TabularInline):
     model= CustomerLedger
     extra = 1
 
+
+
 # Register your models here.
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
@@ -29,6 +31,8 @@ class ShiftReportAdmin(admin.ModelAdmin):
 @admin.register(CustomerLedger)
 class CustomerLedgerAdmin(admin.ModelAdmin):
     list_display= ("customer","transaction_type","amount")
+    search_fields = ("customer__name", "transaction_type")
+
 
 
 @admin.register(SaleItem)
