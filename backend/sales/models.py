@@ -27,7 +27,7 @@ class PaymentMethodChoices(models.TextChoices):
     CREDIT = 'Credit', _('Credit')
 
 class Customer(TenantAwareModel):
-    id = models.CharField(primary_key=True, default=generate_customer_id, editable=False)
+    id = models.CharField(primary_key=True, max_length=50, default=generate_customer_id, editable=False)
     name = models.CharField(max_length=150, db_index=True)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
@@ -118,6 +118,12 @@ class Payment(TenantAwareModel):
         DEBT_PAYMENT='Debt Payment', _('Debt Payment')
         REFUND = 'Refund', _('Refund')
 
+    class Status(models.TextChoices):
+        COMPLETED = 'Completed', _('Completed')
+        PENDING = 'Pending', _('Pending')
+        FAILED = 'Failed',_('Failed')
+        VOIDED = 'Voided',_('Voided')
+        
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, related_name='payments', null=True, blank=True)
     transaction_type= models.CharField(max_length=20, choices=Transactiontype.choices, default=Transactiontype.SALES)
@@ -126,6 +132,7 @@ class Payment(TenantAwareModel):
     method = models.CharField(max_length=20, choices=PaymentMethodChoices.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reference_code = models.CharField(max_length=100, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.COMPLETED)
 
     class Meta:
         db_table = 'payments'

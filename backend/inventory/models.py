@@ -178,7 +178,7 @@ class PaymentMethodChoices(models.TextChoices):
     DEBT = 'Debt', _('Debt')
 
 class Supplier(TenantAwareModel):
-    id = models.CharField(primary_key=True, default=generate_supplier_id, editable=False)
+    id = models.CharField(primary_key=True, max_length=12, default=generate_supplier_id, editable=False)
     name = models.CharField(max_length=150, db_index=True)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20, null=True, blank=True)

@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from common.models import Branch
 from .models import (Product, InventoryBatch, Category,
                       StockTransferLog, ProductPriceHistory, InventoryLog, Supplier, 
@@ -9,6 +10,9 @@ from decimal import Decimal, InvalidOperation
 import random
 import string
 from django.db.models import ProtectedError
+from accounting.services import (record_stock_receipt_accounting, record_stock_removal_accounting, 
+                                 record_supplier_payment_accounting, record_transfer_initiation_accounting,
+                                 record_transfer_acceptance_accounting, record_transfer_rejection_accounting)
 
 def generate_receipt_ref(transaction_type):
     """Generates a short, unique reference like PAY-8X92B"""
@@ -252,6 +256,16 @@ def receive_stock_service(
             po.status = PurchaseOrder.OrderStatus.RECEIVED
             po.save(update_fields=['status'])
 
+        record_stock_receipt_accounting(
+            tenant=user.tenant,
+            branch=branch,
+            invoice_id=str(invoice.id),
+            total_value=total_invoice_amount,
+            debt_amount=debt_incurred,
+            amount_paid=amount_paid_upfront,
+            payment_method=payment_method
+        )
+
     return invoice
 
 def create_product_service(*, user, data):
@@ -324,7 +338,7 @@ def initiate_transfer_service(
         raise ValidationError("Invalid branch or product selection.")
 
     with transaction.atomic():
-        # ✅ ADD THIS MISSING BLOCK: Fetch batches and lock them
+        # Fetch batches and lock them
         source_batches = InventoryBatch.objects.select_for_update().filter(
             tenant=user.tenant,
             branch=source_branch,
@@ -333,7 +347,7 @@ def initiate_transfer_service(
             status=InventoryBatch.Status.ACTIVE # Or 'Active' depending on your model choices
         ).order_by('created_at')
 
-        # ✅ ADD THIS MISSING BLOCK: Check if we have enough stock
+        # Check if we have enough stock
         total_available = sum(batch.quantity_on_hand for batch in source_batches)
         if quantity > total_available:
             raise ValidationError(f"Insufficient stock at source branch. Available: {total_available}")
@@ -351,11 +365,15 @@ def initiate_transfer_service(
         )
 
         remaining_to_transfer = quantity
+        total_transfer_value = Decimal('0.00')
         
         # 3. Deduct from Source and create IN TRANSIT destination batches
         for batch in source_batches: 
             if remaining_to_transfer <= 0: break
             transfer_qty = min(remaining_to_transfer, batch.quantity_on_hand)
+
+            # Accumulate the exact financial value leaving the branch
+            total_transfer_value += transfer_qty * batch.cost_price_at_receipt
             
             # Deduct source
             batch.quantity_on_hand -= transfer_qty
@@ -376,7 +394,15 @@ def initiate_transfer_service(
             )
             remaining_to_transfer -= transfer_qty
 
-        # Optional: Call your email notification function here if you are using it!
+        # Dispatch financial data to Accounting Module
+        record_transfer_initiation_accounting(
+            tenant=user.tenant,
+            source_branch=source_branch,
+            transfer_id=str(transfer_log.id),
+            total_value=total_transfer_value
+        )
+
+        # Optional: Call email notification function here!
 
         return transfer_log
 
@@ -397,9 +423,11 @@ def accept_transfer_service(*, user, transfer_id):
             batch_number=f"TRF-{transfer.id}",
             status='In_Transit'
         )
+        total_accepted_value = Decimal('0.00')
 
         # 2. Make them active so they can be sold
         for batch in transit_batches:
+            total_accepted_value += batch.quantity_on_hand * batch.cost_price_at_receipt
             batch.status = 'Active'
             batch.save()
 
@@ -407,6 +435,13 @@ def accept_transfer_service(*, user, transfer_id):
         transfer.status = StockTransferLog.Status.COMPLETED
         transfer.received_by = user
         transfer.save()
+
+        record_transfer_acceptance_accounting(
+            tenant=user.tenant,
+            dest_branch=transfer.destination_branch,
+            transfer_id=str(transfer.id),
+            total_value=total_accepted_value
+        )
 
         return transfer
 
@@ -430,10 +465,12 @@ def reject_transfer_service(*, user, transfer_id: str, reason: str = ""):
             batch_number=f"TRF-{transfer.id}",
             status='In_Transit'
         )
-
+        total_rejected_value = Decimal('0.00')
         # 3. Return the stock to the Source Branch
         for batch in transit_batches:
             # Recreate the batch at the source branch to make it available for sale again
+            total_rejected_value += batch.quantity_on_hand * batch.cost_price_at_receipt
+
             InventoryBatch.objects.create(
                 tenant=user.tenant,
                 branch=transfer.source_branch, # ⬅️ Going back to sender
@@ -455,6 +492,14 @@ def reject_transfer_service(*, user, transfer_id: str, reason: str = ""):
         transfer.save()
 
         # Optional: You could trigger an email here to notify the source branch manager!
+
+        # Dispatch financial data to Accounting Module
+        record_transfer_rejection_accounting(
+            tenant=user.tenant,
+            source_branch=transfer.source_branch,
+            transfer_id=str(transfer.id),
+            total_value=total_rejected_value
+        )
 
         return transfer
     
@@ -513,6 +558,10 @@ def update_batch_expiry_service(*, user, batch_id: str, new_expiry_date) -> Inve
 
 @transaction.atomic
 def remove_stock_service(*, user, product_id, branch_id, quantity, reason, notes=""):
+
+    branch = Branch.objects.filter(id=branch_id, tenant=user.tenant).first()
+    if not branch:
+        raise ValidationError("Invalid branch.")
     
     # 1. Fetch active batches for this product, oldest first (FIFO)
     batches = InventoryBatch.objects.select_for_update().filter(
@@ -559,6 +608,16 @@ def remove_stock_service(*, user, product_id, branch_id, quantity, reason, notes
         reason=reason,
         total_value=financial_loss_value,
         notes=notes
+    )
+
+
+    ref_id = f"REM-{product_id}-{int(timezone.now().timestamp())}"
+    record_stock_removal_accounting(
+        tenant=user.tenant,
+        branch=branch,
+        reference_id=ref_id,
+        loss_value=financial_loss_value,
+        reason=reason
     )
 
     return True
@@ -690,6 +749,14 @@ def pay_supplier_credit_service(
             method=method,
             amount=amount,
             reference_code=payment_reference
+        )
+
+        record_supplier_payment_accounting(
+            tenant=user.tenant,
+            branch=branch,
+            payment_reference=payment_reference,
+            amount=amount,
+            payment_method=method
         )
 
         return ledger

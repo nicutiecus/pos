@@ -1,6 +1,31 @@
 from django.db import models
 from django.conf import settings
 from common.models import TenantAwareModel
+from accounting.models import Account
+
+
+class ExpenseCategory(TenantAwareModel):
+    """
+    Maps a user-friendly category name to a specific GL Account.
+    Example: name="Office Fuel", account="6010 - Fuel Expense"
+    """
+    name = models.CharField(max_length=150)
+    account = models.ForeignKey(
+        Account, 
+        on_delete=models.PROTECT, 
+        limit_choices_to={'account_type': 'Expense'},
+        help_text="The General Ledger account to debit for this category."
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'finance_expense_categories'
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'name'], name='unique_expense_category_per_tenant')
+        ]
+
+    def __str__(self):
+        return f"{self.name} -> {self.account.code}"
 
 class Expense(TenantAwareModel):
     class Category(models.TextChoices):
@@ -18,7 +43,7 @@ class Expense(TenantAwareModel):
     scope = models.CharField(max_length=200, choices=ExpenseScope, default=ExpenseScope.BRANCH)
 
     branch = models.ForeignKey('common.Branch', on_delete=models.CASCADE, related_name='expenses', null=True, blank=True)
-    category = models.CharField(max_length=50, choices=Category.choices, default=Category.OTHER)
+    category = models.ForeignKey(ExpenseCategory, on_delete= models.PROTECT)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.TextField(null=True, blank=True)
     approved_by = models.ForeignKey(

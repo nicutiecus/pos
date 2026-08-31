@@ -10,7 +10,8 @@ import string
 from .models import ShiftReport
 from .selectors import get_current_shift_data
 from .models import VoidRequest
-
+from accounting.services import (record_customer_debt_payment_accounting, record_sale_accounting,
+                                 record_void_sale_accounting)
 
 
 
@@ -81,6 +82,7 @@ def create_sale_service(
 
         total_order_amount = Decimal('0.00')
         calculated_subtotal= Decimal('0.00')
+        total_cost_of_sales = Decimal('0.00')
 
         # 3. Process Items & Deduct Stock (The FIFO Logic)
         for item_data in items:
@@ -133,6 +135,7 @@ def create_sale_service(
                 # We snapshot cost_price here to know exactly how much profit we made later
                 subtotal = take_qty * product.selling_price
                 calculated_subtotal += subtotal
+               
                 
                 SaleItem.objects.create(
                     order=order,
@@ -233,7 +236,14 @@ def create_sale_service(
                 branch=branch,
                 processed_by = user
             )
-
+        record_sale_accounting(
+            tenant=user.tenant,
+            branch=branch,
+            order=order,
+            payments=payments,
+            debt_amount=debt_amount,
+            total_cost_of_sales=total_cost_of_sales
+        )
         # 7. Update Final Status
         if debt_amount == 0:
             order.payment_status = SalesOrder.PaymentStatus.PAID
@@ -263,20 +273,23 @@ def pay_customer_debt_service(
     if not branch:
         raise ValidationError("Invalid branch.")
 
+    #cast amount to decimal for precise financial math
+    amount_decimal = Decimal(str(amount))
+
     with transaction.atomic():
         try:
             customer = Customer.objects.select_for_update().get(id=customer_id, tenant=user.tenant)
         except Customer.DoesNotExist:
             raise ValidationError("Customer not found.")
 
-        if amount <= 0:
+        if amount_decimal <= 0:
             raise ValidationError("Payment amount must be greater than zero.")
             
-        if amount > customer.current_debt:
+        if amount_decimal > customer.current_debt:
             raise ValidationError(f"Amount exceeds debt. Outstanding: {customer.current_debt}")
 
         # 1. Update Debt
-        customer.current_debt -= amount
+        customer.current_debt -= amount_decimal
         customer.save()
 
         # 2. Generate Invoice Number
@@ -288,12 +301,9 @@ def pay_customer_debt_service(
             branch=branch,
             customer=customer,
             transaction_type=CustomerLedger.TransactionType.PAYMENT,
-            amount=amount,
+            amount=amount_decimal,
             balance_after=customer.current_debt,
-            
-            # ✅ STORE THE INVOICE NUMBER HERE
-            reference_id=invoice_number, 
-            
+            reference_id=invoice_number,
             notes=notes or f"Debt payment via {method}"
         )
         Payment.objects.create(
@@ -303,8 +313,16 @@ def pay_customer_debt_service(
             processed_by=user,
             transaction_type=Payment.Transactiontype.DEBT_PAYMENT,
             method=method,
-            amount=amount,
+            amount=amount_decimal,
             reference_code=invoice_number
+        )
+
+        record_customer_debt_payment_accounting(
+            tenant=user.tenant,
+            branch=branch,
+            payment_reference=invoice_number,
+            amount=amount_decimal,
+            payment_method=method
         )
 
         return ledger
@@ -382,6 +400,11 @@ def process_void_transaction(*, tenant, branch_id, order_id: str, requested_by, 
             "Please process this as a standard Return instead."
         )
 
+    # Calculate financial values to reverse
+    debt_amount = max(Decimal('0.00'), order.total_amount - order.amount_paid)
+    payments = list(Payment.objects.filter(order=order))
+    total_cogs = Decimal('0.00')
+
     # 4. Mutate the Order State
     order.status = 'Voided'
     # Optional: Log who voided it and why on the order model if you have these fields
@@ -398,6 +421,7 @@ def process_void_transaction(*, tenant, branch_id, order_id: str, requested_by, 
     # Just like returns, we create a fresh batch at the exact cost price locked during the sale.
     # Because it happened on the same day, this perfectly preserves asset value.
     for item in order.items.all():
+        total_cogs += item.quantity * item.cost_price_at_sale
         InventoryBatch.objects.create(
             tenant=tenant,
             branch_id=branch_id,
@@ -407,6 +431,43 @@ def process_void_transaction(*, tenant, branch_id, order_id: str, requested_by, 
             cost_price=item.cost_price_at_sale, # Crucial: Restores exact ledger value
             notes=f"Restocked from Voided Order #{order.receipt_number}. Auth by: {authorized_by.get_full_name()}"
         )
+
+    # Nullify associated payments
+    Payment.objects.filter(order=order).update(status='Voided')
+
+    # Reverse Customer Debt if it was a credit sale
+    if debt_amount > 0 and order.customer:
+        customer = Customer.objects.select_for_update().get(id=order.customer.id)
+        customer.current_debt -= debt_amount
+        customer.save()
+        
+        CustomerLedger.objects.create(
+            tenant=tenant,
+            branch_id=branch_id,
+            customer=customer,
+            transaction_type=CustomerLedger.TransactionType.VOID_SALE,
+            amount=-debt_amount, # Stored as negative to represent a reduction in debt
+            balance_after=customer.current_debt,
+            reference_id=f"VOID-{order.id}",
+            notes=f"Voided credit sale (Order #{str(order.id)[:8]})",
+            processed_by=authorized_by
+        )
+
+    # Mutate the Order State
+    order.status = 'Voided'
+    order.save()
+
+    # Dispatch financial data to Accounting Module
+    record_void_sale_accounting(
+        tenant=tenant,
+        branch=order.branch,
+        order=order,
+        payments=payments,
+        debt_amount=debt_amount,
+        total_cost_of_sales=total_cogs
+    )
+
+    return order
 
     return order
 
@@ -457,29 +518,14 @@ def resolve_void_request(*, tenant, request_id: int, user, action: str, rejectio
 
     # 4. Handle Approval (Execute the core void logic)
     if action == 'Approve':
-        order = void_req.order
-        
-        # [Insert the Shift Validation check here if you still want to ensure 
-        # the cashier's shift hasn't closed while the manager was reviewing]
-
-        # Mutate Order
-        order.status = 'Voided'
-        order.save()
-
-        # Mutate Payments
-        Payment.objects.filter(reference_code=order.receipt_number).update(status='Voided')
-
-        # Restock Inventory (FIFO Safe)
-        for item in order.items.all():
-            InventoryBatch.objects.create(
-                tenant=tenant,
-                branch_id=void_req.branch_id,
-                product=item.product,
-                quantity_received=item.quantity,
-                quantity_remaining=item.quantity,
-                cost_price=item.cost_price_at_sale,
-                notes=f"Restocked from Voided Order #{order.receipt_number}. Auth by: {user.get_full_name()}"
-            )
+        process_void_transaction(
+            tenant=tenant,
+            branch_id=void_req.branch_id,
+            order_id=void_req.order.id,
+            requested_by=void_req.requested_by,
+            authorized_by=user,
+            reason=void_req.reason
+        )
 
         # Update Request Trail
         void_req.status = 'Approved'
