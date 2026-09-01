@@ -136,9 +136,11 @@ const AdminLayout: React.FC = () => {
           </div>
           {/* --- END DROPDOWN --- */}
           <Link to="/admin/branches" className="p-2 hover:bg-gray-800 rounded transition-colors">Branches</Link>
+          <Link to="/admin/accounting" className="p-2 hover:bg-gray-800 rounded transition-colors">Accounting</Link>
           <Link to="/admin/customers" className="p-2 hover:bg-gray-800 rounded transition-colors">Customers</Link>
           <Link to="/admin/expenses" className="p-2 hover:bg-gray-800 rounded transition-colors">Expenses</Link>
           <Link to="/admin/users" className="p-2 hover:bg-gray-800 rounded transition-colors">Users & Roles</Link>
+        
           <Link to="/admin/settings" className="p-2 hover:bg-gray-800 rounded transition-colors">Settings</Link>
 
           

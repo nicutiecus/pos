@@ -50,6 +50,8 @@ import AdminShiftReports from '../features/admin-dash/AdminShiftReports';
 import AdminSalesOrders from '../features/admin-dash/AdminSalesOrders';
 import AdminEODReport from '../features/admin-dash/AdminEODReport';
 import PeriodicReport from '../features/admin-dash/AdminPeriodicReport';
+//Accounting
+import ChartOfAccounts from '../features/admin-dash/ChartOfAccounts';
 //Settings
 import AdminSettings from '../features/admin-dash/AdminSettings';
 //Sales Payments
@@ -108,6 +110,7 @@ const AppRouter: React.FC = () => {
         <Route path="/admin" element={<AdminLayout />}>
         {/* Default admin page redirects to branches for now */}
             <Route index element={<Navigate to ='dashboard'/>} /> {/* Matches /admin */}
+            <Route path = "accounting" element={<ChartOfAccounts/>} />
             <Route path="organization-stock" element={<OrganizationInventory/>}/>
             <Route path="inventory-batches" element={<InventoryBatches/>} />
             <Route path="inventory" element={<InventoryManagement/>} />

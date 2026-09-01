@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from decimal import Decimal
 from .models import Account, JournalEntry, JournalEntryLine
+from common.models import Branch
+
 
 
 
@@ -55,6 +57,49 @@ def create_account_service(
         
     return account
 
+
+def update_account_service(
+    *,
+    user,
+    account_id: int,
+    **data
+) -> Account:
+    """
+    Updates an existing General Ledger account while enforcing tenant boundaries and uniqueness.
+    """
+    admin_roles = ['Admin', 'Super_Admin', 'Tenant_Admin']
+    if user.role not in admin_roles:
+        raise ValidationError("You do not have permission to update GL accounts.")
+
+    try:
+        # Strict tenant boundary check
+        account = Account.objects.get(id=account_id, tenant=user.tenant)
+    except Account.DoesNotExist:
+        raise ValidationError("Account not found or you do not have permission to access it.")
+
+    # Validate uniqueness if code is being updated
+    if 'code' in data and data['code'] != account.code:
+        if Account.objects.filter(tenant=user.tenant, code=data['code']).exists():
+            raise ValidationError(f"An account with code '{data['code']}' already exists.")
+
+    # Validate uniqueness if name is being updated
+    if 'name' in data and data['name'].strip().lower() != account.name.lower():
+        if Account.objects.filter(tenant=user.tenant, name__iexact=data['name'].strip()).exists():
+            raise ValidationError(f"An account named '{data['name']}' already exists.")
+
+    # Apply updates dynamically
+    for field, value in data.items():
+        if isinstance(value, str):
+            value = value.strip()
+        setattr(account, field, value)
+    
+    try:
+        account.full_clean()
+        account.save()
+    except IntegrityError:
+        raise ValidationError("Database integrity error during update.")
+        
+    return account
 
 
 @transaction.atomic
@@ -111,14 +156,18 @@ def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount
     Translates a SalesOrder into balanced journal entries.
     Handles Gross Revenue, Discounts (Contra-Revenue), Receivables, Payments, and COGS.
     """
+    settings = tenant.accounting_settings
     journal_lines = []
     
     # Calculate Gross Revenue (Net Total + Discount)
     gross_revenue = order.total_amount + order.discount_amount
+
+    if not settings.default_sales_account:
+        raise ValidationError("Sales revenue account is not configured in Accounting Settings.")
     
     # 1. Credit Sales Revenue (Gross)
     revenue_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_sales_account_code)
-    journal_lines.append({'account': revenue_account, 'debit': Decimal('0.00'), 'credit': gross_revenue})
+    journal_lines.append({'account': settings.default_sales_account, 'debit': Decimal('0.00'), 'credit': gross_revenue})
 
     # 2. Debit Sales Discounts (Contra-Revenue)
     if order.discount_amount > 0:
@@ -456,3 +505,68 @@ def record_expense_accounting(
         lines_data=journal_lines
     )
 
+
+@transaction.atomic
+def create_manual_journal_entry(*, user, reference_id: str = None, description: str, branch_id=None, lines: list):
+    """
+    Validates and constructs a manual journal entry from API data.
+    """
+    branch = None
+    if branch_id:
+        try:
+            branch = Branch.objects.get(id=branch_id, tenant=user.tenant)
+        except Branch.DoesNotExist:
+            raise ValidationError("Branch not found or you lack permission to access it.")
+
+    lines_data = []
+    for line in lines:
+        try:
+            account = Account.objects.get(id=line['account_id'], tenant=user.tenant)
+        except Account.DoesNotExist:
+            raise ValidationError(f"Account ID {line['account_id']} not found in your Chart of Accounts.")
+        
+        lines_data.append({
+            'account': account,
+            'debit': line.get('debit', 0),
+            'credit': line.get('credit', 0)
+        })
+
+    # Leverages the existing validation and insertion logic
+    return record_journal_entry(
+        tenant=user.tenant,
+        branch=branch,
+        reference_id=reference_id,
+        description=description,
+        lines_data=lines_data
+    )
+
+@transaction.atomic
+def reverse_journal_entry_service(*, user, journal_entry_id: int):
+    """
+    Creates a new journal entry that exactly reverses a previous one by swapping debits/credits.
+    """
+    try:
+        original_entry = JournalEntry.objects.prefetch_related('lines').get(
+            id=journal_entry_id, 
+            tenant=user.tenant
+        )
+    except JournalEntry.DoesNotExist:
+        raise ValidationError("Original journal entry not found.")
+
+    new_description = f"Reversal of Entry #{original_entry.id}: {original_entry.description}"
+
+    lines_data = []
+    for line in original_entry.lines.all():
+        lines_data.append({
+            'account': line.account,
+            'debit': line.credit,  # Swap
+            'credit': line.debit   # Swap
+        })
+
+    return record_journal_entry(
+        tenant=user.tenant,
+        branch=original_entry.branch,
+        reference_id=original_entry.reference_id,
+        description=new_description,
+        lines_data=lines_data
+    )
