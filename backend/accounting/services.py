@@ -1,8 +1,60 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from decimal import Decimal
-from .models import JournalEntry, JournalEntryLine
-from .models import Account
+from .models import Account, JournalEntry, JournalEntryLine
+
+
+
+def create_account_service(
+    *,
+    user,
+    name: str,
+    code: str,
+    account_type: str,
+    description: str = "",
+    is_active: bool = True
+) -> Account:
+    """
+    Creates a new General Ledger account for the tenant's Chart of Accounts.
+    """
+    # 1. Authorization
+    admin_roles = ['Admin', 'Super_Admin', 'Tenant_Admin']
+    if user.role not in admin_roles:
+        raise ValidationError("You do not have permission to create GL accounts.")
+
+    # 2. Type Validation
+    # Assuming your Account model uses standard Django TextChoices for account_type
+    valid_types = [choice[0] for choice in Account.AccountType.choices]
+    if account_type not in valid_types:
+        raise ValidationError(f"Invalid account type. Must be one of: {', '.join(valid_types)}")
+
+    # 3. Tenant-Level Uniqueness Checks
+    if Account.objects.filter(tenant=user.tenant, code=code).exists():
+        raise ValidationError(f"An account with code '{code}' already exists in your Chart of Accounts.")
+
+    if Account.objects.filter(tenant=user.tenant, name__iexact=name).exists():
+        raise ValidationError(f"An account named '{name}' already exists in your Chart of Accounts.")
+
+    # 4. Model Instantiation & Validation
+    account = Account(
+        tenant=user.tenant,
+        name=name.strip(),
+        code=code.strip(),
+        account_type=account_type,
+        description=description.strip(),
+        is_active=is_active
+    )
+    
+    try:
+        account.full_clean()
+        account.save()
+    except IntegrityError:
+        # Fallback for race conditions bypassing the .exists() check
+        raise ValidationError("Database integrity error. Ensure the account code and name are unique.")
+        
+    return account
+
 
 
 @transaction.atomic
@@ -403,3 +455,4 @@ def record_expense_accounting(
         description=f"Expense: {description}",
         lines_data=journal_lines
     )
+

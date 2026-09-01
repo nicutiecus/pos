@@ -43,7 +43,12 @@ class Expense(TenantAwareModel):
     scope = models.CharField(max_length=200, choices=ExpenseScope, default=ExpenseScope.BRANCH)
 
     branch = models.ForeignKey('common.Branch', on_delete=models.CASCADE, related_name='expenses', null=True, blank=True)
-    category = models.ForeignKey(ExpenseCategory, on_delete= models.PROTECT)
+    
+    # Add the new relation as nullable
+    category= models.ForeignKey(
+        'ExpenseCategory', 
+        on_delete=models.PROTECT, 
+    )
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.TextField(null=True, blank=True)
     approved_by = models.ForeignKey(

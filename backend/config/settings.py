@@ -57,7 +57,8 @@ INSTALLED_APPS = [
     'finance',
     'reports',
     'superadmin',
-    'returns'
+    'returns',
+    'subscription'
 ]
 
 MIDDLEWARE = [

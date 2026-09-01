@@ -160,9 +160,6 @@ class ProductCreateApi(views.APIView):
     
 
     
-
-
-
 class CategoryListCreateApi(views.APIView):
     permission_classes = [IsAuthenticated]
 
