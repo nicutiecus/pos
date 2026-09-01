@@ -48,6 +48,7 @@ class CustomerLedger(TenantAwareModel):
         SALE = 'Sale', _('Sale')
         PAYMENT = 'Payment', _('Payment')
         RETURN = 'Return', _('Return')
+        VOID_SALE = 'Void Sale', _('Void Sale')
 
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='ledger_entries')
     transaction_type = models.CharField(max_length=20, choices=TransactionType.choices)
@@ -123,7 +124,7 @@ class Payment(TenantAwareModel):
         PENDING = 'Pending', _('Pending')
         FAILED = 'Failed',_('Failed')
         VOIDED = 'Voided',_('Voided')
-        
+
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, related_name='payments', null=True, blank=True)
     transaction_type= models.CharField(max_length=20, choices=Transactiontype.choices, default=Transactiontype.SALES)
