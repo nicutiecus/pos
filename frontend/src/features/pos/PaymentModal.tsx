@@ -173,10 +173,15 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
     };
 
     try {
-        await api.post('/sales/create/', payload, {headers:{'X-Idempotency-Key': idempotencyKey}});
-        alert('Payment Successful!');
+        const res = await api.post('/sales/create/', payload, {headers:{'X-Idempotency-Key': idempotencyKey}});
+    
         
         // --- TODO: TRIGGER RECEIPT PRINTING HERE ---
+        if (res.data.warning) {
+            alert(`Payment Successful!\n\n⚠️ SYSTEM WARNING:\n${res.data.warning}`);
+        } else {
+            alert('Payment Successful!');
+        }
         
         dispatch(clearCart());
         onClose();

@@ -2,7 +2,7 @@ from django.urls import path, include
 from .apis import (CreateSaleApi, SalesListApi, SalesDetailApi, 
                    PayDebtApi, CustomerLedgerApi, CloseShiftApi, CurrentShiftApi,
                    ActiveShiftAPIView, StartShiftAPIView, ClosedShiftListApi, ShiftReportDetailApi,
-                   OpenShiftListApi, SalesPaymentListApi)
+                   OpenShiftListApi, SalesPaymentListApi, ReverseDebtPaymentApi)
 from rest_framework.routers import DefaultRouter
 from .views import CustomerViewSet
 
@@ -16,6 +16,7 @@ urlpatterns = [
     # Custom Customer Actions
     path('customers/<str:customer_id>/pay-debt/', PayDebtApi.as_view(), name='pay-debt'),
     path('customers/<str:customer_id>/ledger/', CustomerLedgerApi.as_view(), name='customer-ledger'),
+    path('payments/<str:payment_id>/reverse/', ReverseDebtPaymentApi.as_view(), name = 'reverse-debt-payment'),
 
     path('create/', CreateSaleApi.as_view(), name='create-sale'),
     path('list/', SalesListApi.as_view(), name = 'sales-list'),

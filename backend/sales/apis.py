@@ -19,7 +19,7 @@ from .serializers import (SalesOrderListSerializer, SalesOrderDetailSerializer,
                           CloseShiftSerializer, ShiftReportSerializer, SalesPaymentListSerializer)
 
 from .services import (create_sale_service, pay_customer_debt_service, close_shift_service, 
-                       create_void_request, resolve_void_request)
+                       create_void_request, resolve_void_request, reverse_debt_payment_service)
 from .models import SalesOrder, ShiftReport, Payment, CustomerLedger
 from common.models import Branch
 
@@ -60,14 +60,20 @@ class CreateSaleApi(views.APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            order = create_sale_service(
+            order, accounting_result = create_sale_service(
                 user=request.user,
                 branch_id=serializer.validated_data['branch_id'],
                 customer_id=serializer.validated_data.get('customer_id'),
                 items=serializer.validated_data['items'],
                 payments=serializer.validated_data.get('payments',[]),
                 discount_amount= serializer.validated_data.get('discount_amount')
+
+        
             )
+           
+
+            # ADD THIS TO SEE WHAT IS REACHING THE VIEW
+            print("DEBUG ACCOUNTING RESULT:", accounting_result)
 
             response_data = {
                 "id": order.id, 
@@ -75,6 +81,8 @@ class CreateSaleApi(views.APIView):
                 "status": order.payment_status,
                 "message": "Sale completed successfully."
             }
+            if accounting_result and not accounting_result.get("success"):
+                response_data["warning"]= accounting_result.get("warning")
             cache.set(cache_key, response_data, timeout=86400)
             return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -527,3 +535,36 @@ class SalesPaymentListApi(views.APIView):
         
     
         return paginator.get_paginated_response(serializer.data)
+
+
+class ReverseDebtPaymentApi(views.APIView):
+    permission_classes =[IsAuthenticated]
+
+    def post(self, request, payment_id):
+        reason = request.data.get('reason', '').strip()
+        
+        try:
+            # Execute the core business logic
+            payment = reverse_debt_payment_service(
+                payment_id=payment_id,
+                user=request.user,
+                reason=reason
+            )
+            
+            return Response({
+                "message": f"Payment #{payment.id} successfully reversed.",
+                "status": payment.status
+            }, status=status.HTTP_200_OK)
+            
+        except ValidationError as e:
+            # Handle domain-level validation errors from the service layer
+            error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+            return Response({
+                "error": error_message
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            # Catch unexpected server errors
+            return Response({
+                "error": "An unexpected error occurred while processing the reversal."
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

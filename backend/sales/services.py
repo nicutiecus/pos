@@ -11,7 +11,8 @@ from .models import ShiftReport
 from .selectors import get_current_shift_data
 from .models import VoidRequest
 from accounting.services import (record_customer_debt_payment_accounting, record_sale_accounting,
-                                 record_void_sale_accounting)
+                                 record_void_sale_accounting, reverse_debt_payment_journal_service)
+
 
 
 
@@ -236,7 +237,7 @@ def create_sale_service(
                 branch=branch,
                 processed_by = user
             )
-        record_sale_accounting(
+        accounting_result = record_sale_accounting(
             tenant=user.tenant,
             branch=branch,
             order=order,
@@ -253,7 +254,7 @@ def create_sale_service(
             order.payment_status = SalesOrder.PaymentStatus.PENDING
 
         order.save()
-        return order
+        return order, accounting_result
     
 
     
@@ -469,8 +470,6 @@ def process_void_transaction(*, tenant, branch_id, order_id: str, requested_by, 
 
     return order
 
-    return order
-
 
 
 def create_void_request(*, tenant, branch_id, order_id: str, cashier, reason: str):
@@ -534,3 +533,60 @@ def resolve_void_request(*, tenant, request_id: int, user, action: str, rejectio
         void_req.save()
 
         return void_req
+
+
+@transaction.atomic
+def reverse_debt_payment_service(*, payment_id: int, user, reason: str = "") -> Payment:
+    """
+    Reverses a customer debt payment. Handles the operational customer ledger
+    and delegates General Ledger (double-entry) updates to the accounting app.
+    """
+    try:
+        payment = Payment.objects.select_for_update().get(
+            reference_code=payment_id,
+            tenant=user.tenant,
+            transaction_type='Debt Payment'
+        )
+    except Payment.DoesNotExist:
+        raise ValidationError("Debt payment record not found.")
+
+    if payment.status == 'Voided':
+        raise ValidationError("This payment has already been voided.")
+    if payment.status != 'Completed':
+        raise ValidationError(f"Cannot reverse payment with status: {payment.status}")
+
+    # 1. Restore the customer's debt balance
+    customer = Customer.objects.select_for_update().get(id=payment.customer_id)
+    customer.current_debt += payment.amount
+    customer.save(update_fields=['current_debt', 'updated_at'])
+
+    # 2. Log in the standalone Customer Ledger (Sales App)
+    notes = f"Reversal of Payment #{payment.id}."
+    if reason:
+        notes += f" Reason: {reason}"
+        
+    CustomerLedger.objects.create(
+        tenant=user.tenant,
+        branch=payment.branch,
+        customer=customer,
+        transaction_type='Reversal',
+        amount=payment.amount,
+        balance_after=customer.current_debt,
+        reference_id=str(payment.id),
+        processed_by=user,
+        notes=notes
+    )
+
+    # 3. Mark the operational payment as voided
+    payment.status = 'Voided'
+    payment.save(update_fields=['status', 'updated_at'])
+
+    # 4. Delegate strict Double-Entry General Ledger updates to the Accounting app
+    reverse_debt_payment_journal_service(
+        tenant=user.tenant,
+        payment=payment,
+        user=user,
+        reason=reason
+    )
+
+    return payment

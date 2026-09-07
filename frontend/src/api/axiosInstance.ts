@@ -20,7 +20,7 @@ const api = axios.create({
 // Automatically attach the Authorization token to every outgoing request
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // In a real app, you might store this in localStorage, sessionStorage, or Zustand/Redux
+ 
     const token = localStorage.getItem('accessToken');
     
     if (token && config.headers) {

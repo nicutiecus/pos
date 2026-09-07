@@ -1,12 +1,14 @@
 from django.db import transaction
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import IntegrityError
 from decimal import Decimal
 from .models import Account, JournalEntry, JournalEntryLine
 from common.models import Branch
+import logging
 
 
 
+logger = logging.getLogger(__name__)
 
 def create_account_service(
     *,
@@ -156,23 +158,31 @@ def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount
     Translates a SalesOrder into balanced journal entries.
     Handles Gross Revenue, Discounts (Contra-Revenue), Receivables, Payments, and COGS.
     """
-    settings = tenant.accounting_settings
+
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
+
     journal_lines = []
+    missing_accounts = []
     
     # Calculate Gross Revenue (Net Total + Discount)
     gross_revenue = order.total_amount + order.discount_amount
 
     if not settings.default_sales_account:
-        raise ValidationError("Sales revenue account is not configured in Accounting Settings.")
+        missing_accounts.append("Sales Revenue")
+    else:
+        journal_lines.append({'account': settings.default_sales_account, 'debit': Decimal('0.00'), 'credit': gross_revenue})
     
-    # 1. Credit Sales Revenue (Gross)
-    revenue_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_sales_account_code)
-    journal_lines.append({'account': settings.default_sales_account, 'debit': Decimal('0.00'), 'credit': gross_revenue})
+   
 
     # 2. Debit Sales Discounts (Contra-Revenue)
     if order.discount_amount > 0:
-        discount_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_discount_account_code)
-        journal_lines.append({'account': discount_account, 'debit': order.discount_amount, 'credit': Decimal('0.00')})
+        if not settings.default_discount_account:
+            missing_accounts.append("Sales Discount")
+        else:
+            journal_lines.append({'account': settings.default_discount_account, 'debit': order.discount_amount, 'credit': Decimal('0.00')})
 
     # 3. Debit Payments (Cash, POS, Transfer)
     for payment_data in payments:
@@ -180,39 +190,52 @@ def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount
         method = payment_data['method']
         
         if amount > 0:
+            payment_account = None
             if method == 'Cash':
-                acc_code = tenant.settings.default_cash_account_code
+                payment_account = tenant.settings.default_cash_account
             elif method == 'POS':
-                acc_code = tenant.settings.default_pos_account_code
+                payment_account = tenant.settings.default_pos_account
             elif method == 'Transfer':
-                acc_code = tenant.settings.default_transfer_account_code
+                payment_account = tenant.settings.default_transfer_account
+            if not payment_account:
+                missing_accounts.append(f"{method} Payment")
             else:
-                raise ValidationError(f"Unknown payment method: {method}")
+                journal_lines.append({'account': payment_account, 'debit': amount, 'credit': Decimal('0.00') })
                 
-            payment_account = Account.objects.get(tenant=tenant, code=acc_code)
-            journal_lines.append({'account': payment_account, 'debit': amount, 'credit': Decimal('0.00')})
 
     # 4. Debit Accounts Receivable (Credit Sales)
     if debt_amount > 0:
-        ar_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ar_account_code)
-        journal_lines.append({'account': ar_account, 'debit': debt_amount, 'credit': Decimal('0.00')})
+        if not settings.default_ar_account:
+            missing_accounts.append("Accounts Receivable")
+        else:
+            journal_lines.append({'account': settings.default_ar_account, 'debit': debt_amount, 'credit': Decimal('0.00')})
 
     # 5. Cost of Goods Sold (Debit COGS, Credit Inventory)
     if total_cost_of_sales > 0:
-        cogs_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_cogs_account_code)
-        inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
-        
-        journal_lines.append({'account': cogs_account, 'debit': total_cost_of_sales, 'credit': Decimal('0.00')})
-        journal_lines.append({'account': inventory_account, 'debit': Decimal('0.00'), 'credit': total_cost_of_sales})
+        if not settings.default_cogs_account:
+            missing_accounts.append("Cost of Goods Sold")
+        if not settings.default_inventory_account:
+            missing_accounts.append("Inventory Asset")
+    
+        if settings.default_cogs_account and settings.default_inventory_account:
+            journal_lines.append({'account': settings.default_cogs_account, 'debit': total_cost_of_sales, 'credit': Decimal('0.00')})
+            journal_lines.append({'account': settings.default_inventory_account, 'debit': Decimal('0.00'), 'credit': total_cost_of_sales})
+
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
 
     # Execute the balanced transaction
-    record_journal_entry(
+    journal_entry= record_journal_entry(
         tenant=tenant,
         branch=branch,
         reference_id=order.id,
         description=f"Sales Order #{order.id}",
         lines_data=journal_lines
     )
+
+    return {"success": True, "journal_entry": journal_entry}
 
 
 
@@ -221,31 +244,56 @@ def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_va
     Translates a Purchase Invoice into balanced journal entries.
     Handles Inventory Assets, Accounts Payable, and Payment credits.
     """
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
+    
     journal_lines = []
+    missing_accounts= []
     
     # 1. Debit Inventory (Asset increases)
-    inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
-    journal_lines.append({'account': inventory_account, 'debit': total_value, 'credit': Decimal('0.00')})
+    if not settings.default_inventory_account_code:
+        missing_accounts.append("Inventory Account")
+    else:
+        inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
+        journal_lines.append({'account': inventory_account, 'debit': total_value, 'credit': Decimal('0.00')})
     
     # 2. Credit Accounts Payable (Liability increases for unpaid portions)
     if debt_amount > 0:
-        ap_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ap_account_code)
-        journal_lines.append({'account': ap_account, 'debit': Decimal('0.00'), 'credit': debt_amount})
-        
+        if not settings.deafult_ap_account_code:
+            missing_accounts.append("Accounts Payable")
+        else:
+            ap_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ap_account_code)
+            journal_lines.append({'account': ap_account, 'debit': Decimal('0.00'), 'credit': debt_amount})
+
+      
     # 3. Credit Payment Account (Asset decreases for paid portions)
+
+    method = payment_method
     if amount_paid > 0:
-        if payment_method == 'Cash':
-            acc_code = tenant.settings.default_cash_account_code
-        elif payment_method == 'POS':
-            acc_code = tenant.settings.default_pos_account_code
-        elif payment_method == 'Transfer':
-            acc_code = tenant.settings.default_transfer_account_code
+        payment_account = None
+        if method == 'Cash':
+            payment_account = tenant.settings.default_cash_account
+        elif method == 'POS':
+            payment_account = tenant.settings.default_pos_account
+        elif method == 'Transfer':
+            payment_account = tenant.settings.default_transfer_account
         else:
             raise ValidationError(f"Unknown payment method: {payment_method}")
-            
-        payment_account = Account.objects.get(tenant=tenant, code=acc_code)
-        journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount_paid})
-        
+
+        if not payment_account:
+            missing_accounts.append(f"{method} Account")
+        else:         
+            journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount_paid})
+
+    
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
+
+    
     record_journal_entry(
         tenant=tenant,
         branch=branch,
@@ -261,9 +309,28 @@ def record_stock_removal_accounting(*, tenant, branch, reference_id: str, loss_v
     if loss_value <= 0:
         return
 
-    inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
-    loss_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_loss_account_code)
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
+
+    missing_accounts= []
+
+    if not settings.default_inventory_account:
+        missing_accounts
+    else:
+        inventory_account = settings.default_inventory_account
+    if not settings.default_inventory_loss_account:
+        missing_accounts.append("Inventory Loss Account")
+    else:
+        loss_account = settings.default_inventory_loss_account_code
+
     
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
+        
     record_journal_entry(
         tenant=tenant,
         branch=branch,
@@ -281,24 +348,42 @@ def record_supplier_payment_accounting(*, tenant, branch, payment_reference: str
     Translates a supplier debt payment into a balanced journal entry.
     Debits Accounts Payable and Credits the respective Payment Account (Cash/Bank).
     """
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
     journal_lines = []
+    missing_accounts =[]
     
     # 1. Debit Accounts Payable (Liability decreases)
-    ap_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ap_account_code)
+    if not settings.default_ap_account:
+        missing_accounts.append("Accounts Payable")
+    else:
+        ap_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ap_account_code)
     journal_lines.append({'account': ap_account, 'debit': amount, 'credit': Decimal('0.00')})
     
     # 2. Credit Payment Account (Asset decreases)
-    if payment_method == 'Cash':
-        acc_code = tenant.settings.default_cash_account_code
-    elif payment_method == 'POS':
-        acc_code = tenant.settings.default_pos_account_code
-    elif payment_method == 'Transfer':
-        acc_code = tenant.settings.default_transfer_account_code
+    method =payment_method
+    acc_code = None
+    if method == 'Cash':
+        acc_code = tenant.settings.default_cash_account
+    elif method == 'POS':
+        acc_code = tenant.settings.default_pos_account
+    elif method == 'Transfer':
+        acc_code = tenant.settings.default_transfer_account
     else:
         raise ValidationError(f"Unknown payment method: {payment_method}")
-        
-    payment_account = Account.objects.get(tenant=tenant, code=acc_code)
-    journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount})
+
+    if not acc_code:
+        missing_accounts.append(f"{method} Account")
+    else:    
+        payment_account = Account.objects.get(tenant=tenant, code=acc_code)
+        journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount})
+
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
     
     record_journal_entry(
         tenant=tenant,
@@ -313,11 +398,29 @@ def record_transfer_initiation_accounting(*, tenant, source_branch, transfer_id:
     """
     Records the financial movement of stock from the source branch into transit.
     """
+    try:
+            settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+            return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
+
     if total_value <= 0:
         return
 
-    transit_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_in_transit_account_code)
-    inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
+    missing_accounts = []
+    if not settings.default_inventory_in_transit_account:
+        missing_accounts.append("Inventory In Transit")
+    else:
+        transit_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_in_transit_account_code)
+
+    if not settings.default_inventory_account:
+        missing_accounts.append("Inventory Account")
+    else:
+        inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
+
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
     
     record_journal_entry(
         tenant=tenant,
@@ -336,9 +439,28 @@ def record_transfer_acceptance_accounting(*, tenant, dest_branch, transfer_id: s
     """
     if total_value <= 0:
         return
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
 
-    inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
-    transit_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_in_transit_account_code)
+    missing_accounts=[]
+
+    if not settings.default_inventory_account_code:
+        missing_accounts.append("Inventory Account")
+    else:
+        inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
+    if not settings.default_transit_account_code:
+        missing_accounts.append("Inventory In Transit Account")
+    else:
+        transit_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_in_transit_account_code)
+
+    
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
+    
     
     record_journal_entry(
         tenant=tenant,
@@ -358,8 +480,29 @@ def record_transfer_rejection_accounting(*, tenant, source_branch, transfer_id: 
     if total_value <= 0:
         return
 
-    inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
-    transit_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_in_transit_account_code)
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
+
+    missing_accounts=[]
+
+    if not settings.default_inventory_account_code:
+        missing_accounts.append("Inventory Account")
+    else:
+        inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
+
+    if not settings.default_inventory_in_transit_account_code:
+        missing_accounts.append("Inventory In Transit")
+    else:
+        transit_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_in_transit_account_code)
+
+    
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
+    
     
     record_journal_entry(
         tenant=tenant,
@@ -378,24 +521,46 @@ def record_customer_debt_payment_accounting(*, tenant, branch, payment_reference
     Translates a customer debt payment into a balanced journal entry.
     Debits the Payment Account (Cash/Bank) and Credits Accounts Receivable.
     """
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
+    
+    
     journal_lines = []
+    missing_accounts = []
 
     # 1. Debit Payment Account (Asset increases)
-    if payment_method == 'Cash':
+    method = payment_method
+
+    payment_account = None
+    if method == 'Cash':
         acc_code = tenant.settings.default_cash_account_code
-    elif payment_method == 'POS':
+    elif method == 'POS':
         acc_code = tenant.settings.default_pos_account_code
-    elif payment_method == 'Transfer':
+    elif method == 'Transfer':
         acc_code = tenant.settings.default_transfer_account_code
     else:
         raise ValidationError(f"Unknown payment method: {payment_method}")
 
-    payment_account = Account.objects.get(tenant=tenant, code=acc_code)
-    journal_lines.append({'account': payment_account, 'debit': amount, 'credit': Decimal('0.00')})
+    if not acc_code:
+        missing_accounts.append(f"{method} Account")
+    else:
+        payment_account = Account.objects.get(tenant=tenant, code=acc_code)
+        journal_lines.append({'account': payment_account, 'debit': amount, 'credit': Decimal('0.00')})
 
     # 2. Credit Accounts Receivable (Asset decreases)
-    ar_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ar_account_code)
-    journal_lines.append({'account': ar_account, 'debit': Decimal('0.00'), 'credit': amount})
+    if not settings.default_ar_account:
+        missing_accounts.append("Accounts Receivable")
+    else:
+        ar_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ar_account_code)
+        journal_lines.append({'account': ar_account, 'debit': Decimal('0.00'), 'credit': amount})
+
+    
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
 
     record_journal_entry(
         tenant=tenant,
@@ -411,25 +576,39 @@ def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_a
     Reverses the financial impact of a sales order.
     Debits Revenue, Credits Payments/Receivables, and reverses COGS.
     """
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
+        
+    
     journal_lines = []
+    missing_accounts = []
     
     # Calculate Original Gross Revenue
     gross_revenue = order.total_amount + order.discount_amount
     
     # 1. Debit Sales Revenue (Reverse Gross)
-    revenue_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_sales_account_code)
-    journal_lines.append({'account': revenue_account, 'debit': gross_revenue, 'credit': Decimal('0.00')})
+    if not settings.default_sales_account:
+        missing_accounts.append("")
+    else:
+        revenue_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_sales_account_code)
+        journal_lines.append({'account': revenue_account, 'debit': gross_revenue, 'credit': Decimal('0.00')})
 
     # 2. Credit Sales Discounts (Reverse Contra-Revenue)
     if order.discount_amount > 0:
-        discount_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_discount_account_code)
-        journal_lines.append({'account': discount_account, 'debit': Decimal('0.00'), 'credit': order.discount_amount})
+        if not settings.default_discount_account:
+            missing_accounts.append("Discount Account")
+        else:
+            discount_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_discount_account_code)
+            journal_lines.append({'account': discount_account, 'debit': Decimal('0.00'), 'credit': order.discount_amount})
 
     # 3. Credit Payments (Reverse Cash, POS, Transfer)
     for payment in payments:
         amount = Decimal(str(payment.amount))
         method = payment.method
-        
+
+        acc_code = None
         if amount > 0:
             if method == 'Cash':
                 acc_code = tenant.settings.default_cash_account_code
@@ -439,23 +618,42 @@ def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_a
                 acc_code = tenant.settings.default_transfer_account_code
             else:
                 raise ValidationError(f"Unknown payment method: {method}")
-                
-            payment_account = Account.objects.get(tenant=tenant, code=acc_code)
-            journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount})
+
+            if not acc_code:
+                missing_accounts.append(f"{method} Account")
+            else:   
+                payment_account = Account.objects.get(tenant=tenant, code=acc_code)
+                journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount})
 
     # 4. Credit Accounts Receivable (Reverse Credit Sales)
     if debt_amount > 0:
-        ar_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ar_account_code)
-        journal_lines.append({'account': ar_account, 'debit': Decimal('0.00'), 'credit': debt_amount})
+        if not settings.default_ar_account:
+            missing_accounts.append("Accounts receivable")
+        else:
+            ar_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ar_account_code)
+            journal_lines.append({'account': ar_account, 'debit': Decimal('0.00'), 'credit': debt_amount})
 
     # 5. Reverse Cost of Goods Sold (Debit Inventory, Credit COGS)
     if total_cost_of_sales > 0:
-        cogs_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_cogs_account_code)
-        inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
-        
-        journal_lines.append({'account': inventory_account, 'debit': total_cost_of_sales, 'credit': Decimal('0.00')})
-        journal_lines.append({'account': cogs_account, 'debit': Decimal('0.00'), 'credit': total_cost_of_sales})
+        cogs_account= None
+        inventory_account = None
+        if not settings.default_cogs_account:
+            missing_accounts.append("Cost of Goods Sold")
+        else:
+            cogs_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_cogs_account_code)
+        if not settings.default_inventory_account:
+            missing_accounts.append("Inventory account")
+        else:
+            inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
 
+        if cogs_account and inventory_account:
+            journal_lines.append({'account': inventory_account, 'debit': total_cost_of_sales, 'credit': Decimal('0.00')})
+            journal_lines.append({'account': cogs_account, 'debit': Decimal('0.00'), 'credit': total_cost_of_sales})
+    
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
     # Execute the balanced transaction reversal
     record_journal_entry(
         tenant=tenant,
@@ -480,22 +678,34 @@ def record_expense_accounting(
     Translates a mapped expense into a balanced journal entry.
     """
     journal_lines = []
+    missing_accounts = []
     
     # 1. Debit the Specific Mapped Expense Account
     journal_lines.append({'account': expense_account, 'debit': amount, 'credit': Decimal('0.00')})
 
+    method = payment_method
     # 2. Credit the Payment Account (Asset decreases)
-    if payment_method == 'Cash':
+    acc_code = None
+
+    if method == 'Cash':
         acc_code = tenant.settings.default_cash_account_code
-    elif payment_method == 'POS':
+    elif method == 'POS':
         acc_code = tenant.settings.default_pos_account_code
-    elif payment_method == 'Transfer':
+    elif method == 'Transfer':
         acc_code = tenant.settings.default_transfer_account_code
     else:
         raise ValidationError(f"Unknown payment method: {payment_method}")
-        
-    payment_account = Account.objects.get(tenant=tenant, code=acc_code)
-    journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount})
+
+    if not acc_code:
+        missing_accounts.append(f"{method} Account")
+    else:
+        payment_account = Account.objects.get(tenant=tenant, code=acc_code)
+        journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount})
+
+    if missing_accounts:
+        warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
 
     record_journal_entry(
         tenant=tenant,
@@ -570,3 +780,28 @@ def reverse_journal_entry_service(*, user, journal_entry_id: int):
         description=new_description,
         lines_data=lines_data
     )
+
+
+@transaction.atomic
+def reverse_debt_payment_journal_service(*, tenant, payment, user, reason: str = ""):
+    """
+    Handles the strict double-entry General Ledger reversal for a voided debt payment.
+    Finds the original journal entry and processes the Debits/Credits reversal.
+    """
+    try:
+        # Assuming your system saves the payment ID as the reference_id on the JournalEntry
+        original_journal = JournalEntry.objects.get(
+            tenant=tenant,
+            reference_id=str(payment.id)
+        )
+        
+        # Utilize your existing core GL reversal service
+        reverse_journal_entry_service(
+            user=user,
+            journal_entry_id=original_journal.id
+        )
+        
+    except JournalEntry.DoesNotExist:
+        # If no GL entry was created for the original payment (e.g., legacy data), 
+        # fail silently or log the anomaly depending on system strictness.
+        pass

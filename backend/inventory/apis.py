@@ -673,3 +673,6 @@ class SupplierPaymentListApi(views.APIView):
 
 
         )
+
+class ReverseDebtPaymentApi(views.APIView):
+    permission_classes =[IsAuthenticated]

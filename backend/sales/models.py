@@ -49,6 +49,7 @@ class CustomerLedger(TenantAwareModel):
         PAYMENT = 'Payment', _('Payment')
         RETURN = 'Return', _('Return')
         VOID_SALE = 'Void Sale', _('Void Sale')
+        REVERSAL = 'Reversal',_('Reversal')
 
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='ledger_entries')
     transaction_type = models.CharField(max_length=20, choices=TransactionType.choices)

@@ -51,7 +51,14 @@ import AdminSalesOrders from '../features/admin-dash/AdminSalesOrders';
 import AdminEODReport from '../features/admin-dash/AdminEODReport';
 import PeriodicReport from '../features/admin-dash/AdminPeriodicReport';
 //Accounting
-import ChartOfAccounts from '../features/admin-dash/ChartOfAccounts';
+import ChartOfAccounts from '../features/Accounting/ChartOfAccounts';
+import AccountingDashboard from '../features/Accounting/AccountingDashboard';
+import AccountsDetails from '../features/Accounting/AccountsDetails';
+import GeneralLedger from '../features/Accounting/GeneralLedger';
+import AccountsReceivable from '../features/Accounting/AccountsReceivable';
+import AccountsPayable from '../features/Accounting/AccountsPayable';
+import CashBankAccounts from '../features/Accounting/CashBankAccounts';
+import AccountingSettings from '../features/Accounting/AccountingSettings';
 //Settings
 import AdminSettings from '../features/admin-dash/AdminSettings';
 //Sales Payments
@@ -110,7 +117,18 @@ const AppRouter: React.FC = () => {
         <Route path="/admin" element={<AdminLayout />}>
         {/* Default admin page redirects to branches for now */}
             <Route index element={<Navigate to ='dashboard'/>} /> {/* Matches /admin */}
-            <Route path = "accounting" element={<ChartOfAccounts/>} />
+        
+            <Route path = "accounting" element={<AccountingDashboard/>} />
+             <Route path = "accounting/chart-of-accounts" element={<ChartOfAccounts/>} />
+             <Route path = "accounting/accounts/:id" element={<AccountsDetails/>} />
+             <Route path = "accounting/general-ledger" element={<GeneralLedger/>}/>
+             <Route path = "accounting/receivables" element={<AccountsReceivable/>}/>
+             <Route path = "accounting/payables" element={<AccountsPayable/>}/>
+             <Route path = "accounting/cash-bank" element={<CashBankAccounts/>}/>
+             <Route path = "accounting/settings" element={<AccountingSettings/>}/>
+
+
+
             <Route path="organization-stock" element={<OrganizationInventory/>}/>
             <Route path="inventory-batches" element={<InventoryBatches/>} />
             <Route path="inventory" element={<InventoryManagement/>} />

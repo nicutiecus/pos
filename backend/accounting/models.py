@@ -58,8 +58,16 @@ class JournalEntryLine(models.Model):
 
 class AccountingSettings(TenantAwareModel):
     tenant = models.OneToOneField('users.Tenant', on_delete=models.CASCADE, related_name='accounting_settings')
-    
+
+    #account prefixes
+    asset_prefix = models.CharField(max_length=8, default='1000')
+    liability_prefix = models.CharField(max_length=8, default='2000')
+    equity_prefix = models.CharField(max_length=8, default='3000')
+    revenue_prefix = models.CharField(max_length=8, default='4000')
+    expense_prefix = models.CharField(max_length=8, default='5000')
+
     # Asset Accounts
+    
     default_inventory_account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='+')
     default_cash_account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='+')
     default_pos_account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='+')
@@ -67,9 +75,11 @@ class AccountingSettings(TenantAwareModel):
     default_ar_account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='+')
     
     # Liability Accounts
+    
     default_ap_account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='+')
     
     # Revenue & COGS Accounts
+   
     default_sales_account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='+')
     default_discount_account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='+')
     default_cogs_account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='+')
