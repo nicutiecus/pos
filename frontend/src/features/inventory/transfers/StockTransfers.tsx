@@ -263,9 +263,9 @@ const StockTransfers: React.FC = () => {
                 </form>
             )}
 
-            {/* --- TAB: INCOMING TRANSFERS --- */}
+    {/* --- TAB: INCOMING TRANSFERS --- */}
             {activeTab === 'INCOMING' && (
-                <div className="animate-fade-in">
+                <div className="overflow-x-auto animate-fade-in">
                     {incomingTransfers.length === 0 ? (
                         <div className="p-16 text-center text-gray-400">
                             <div className="text-4xl mb-3">📦</div>
@@ -298,23 +298,19 @@ const StockTransfers: React.FC = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {t.formatted_date}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <td className="px-6 py-4 whitespace-nowrap text-center space-x-2">
                                             <button 
                                                 onClick={() => handleAcceptTransfer(t.id)}
                                                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-bold text-sm shadow-sm transition-colors"
                                             >
-                                                Accept Stock
+                                                Accept
                                             </button>
-                                            
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-center">
                                             <button 
                                                 onClick={() => handleRejectTransfer(t.id)}
                                                 className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-bold text-sm shadow-sm transition-colors"
                                             >
-                                                Reject Stock
+                                                Reject
                                             </button>
-                                            
                                         </td>
                                     </tr>
                                 ))}
