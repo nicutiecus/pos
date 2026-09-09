@@ -2,7 +2,7 @@ from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError
-from .models import Expense
+from .models import Expense, ExpenseCategory
 from users.permissions import HasRequiredPermission
 
 from .serializers import ExpenseCreateSerializer, ExpenseListSerializer
@@ -50,9 +50,9 @@ class ExpenseCategoryApi(views.APIView):
     def get(self, request):
         # Expense.Category.choices looks like: [('Fuel & Power', 'Fuel & Power'), ...]
         # We format it into a list of dictionaries for the frontend
-        categories = [
-            {"id": key, "name": label} 
-            for key, label in Expense.Category.choices
-        ]
+        categories = ExpenseCategory.objects.filter(
+            tenant=request.user.tenant, 
+            is_active=True
+        ).values('id', 'name')
         
-        return Response(categories, status=status.HTTP_200_OK)
+        return Response(list(categories), status=status.HTTP_200_OK)

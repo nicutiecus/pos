@@ -14,6 +14,7 @@ from .services import (receive_stock_service, create_product_service,
                        remove_category_service, create_purchase_order_service, create_supplier_service,
                        update_supplier_service, delete_supplier_service, pay_supplier_credit_service, 
                        cancel_purchase_order_service, update_batch_expiry_service)
+
 from .selectors import (get_stock_levels, get_expiring_batches, get_categories,
                         get_inventory_logs, get_products_for_tenant, get_product_catalog, get_stock_transfer_logs,
                         get_product_price_history, get_organization_stock_levels, get_inventory_batches,
@@ -44,7 +45,7 @@ class StockReceiveApi(views.APIView):
                 id=data['purchase_order_id'], 
                 tenant=request.user.tenant
             )
-            print(f"DEBUG: PO Supplier ID is: {po.supplier_id}")
+           
             receive_stock_service(
                 user=request.user,
                 purchase_order_id=data['purchase_order_id'],
@@ -673,6 +674,4 @@ class SupplierPaymentListApi(views.APIView):
 
 
         )
-
-class ReverseDebtPaymentApi(views.APIView):
-    permission_classes =[IsAuthenticated]
+        return Response(supplier_payments, status=status.HTTP_200_OK)

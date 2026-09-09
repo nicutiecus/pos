@@ -9,6 +9,7 @@ class ExpenseCreateSerializer(serializers.Serializer):
     
     # 1. Change to CharField and explicitly allow blanks
     branch_id = serializers.CharField(required=False, allow_null=True, allow_blank=True) 
+    payment_method = serializers.CharField()
     
     category_id = serializers.IntegerField()
     amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)

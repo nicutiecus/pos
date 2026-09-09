@@ -51,7 +51,7 @@ const AccountingSettings: React.FC = () => {
     const fetchSettings = async () => {
       try {
         // Fetch dropdown options for the Chart of Accounts
-        const accountsRes = await api.get('/accounting/chart-of-accounts/options/');
+        const accountsRes = await api.get('/accounting/accounts/');
         setAvailableAccounts(accountsRes.data);
 
         // Fetch current accounting settings

@@ -39,7 +39,7 @@ const ExpenseManagement: React.FC = () => {
   const [formData, setFormData] = useState({
     category: '', 
     amount: '',
-    payment_method: 'Cash from Drawer',
+    payment_method: 'Cash',
     expense_date: new Date().toISOString().split('T')[0],
     description: '',
     scope: isAdmin ? 'Corporate' : 'Branch', // Default depends on role
@@ -110,7 +110,7 @@ const ExpenseManagement: React.FC = () => {
     try {
       // Build the intelligent payload based on Role and Scope
       const payload = {
-        category: formData.category,
+        category_id: formData.category,
         amount: Number(formData.amount),
         payment_method: formData.payment_method,
         expense_date: formData.expense_date,
@@ -233,8 +233,8 @@ const ExpenseManagement: React.FC = () => {
                         >
                             <option value="" disabled>-- Select Category --</option>
                             {categories.map((cat, idx) => {
-                                const value = typeof cat === 'string' ? cat : (cat.id || cat.name);
-                                const label = typeof cat === 'string' ? cat : cat.name;
+                                const value = cat.id || cat;
+                                const label = cat.name || cat;
                                 return (
                                     <option key={idx} value={value}>{label}</option>
                                 );
@@ -249,11 +249,11 @@ const ExpenseManagement: React.FC = () => {
                             onChange={e => setFormData({...formData, payment_method: e.target.value})}
                             className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-gray-800"
                         >
-                            <option value="Cash from Drawer">Cash (From POS Drawer)</option>
-                            <option value="Corporate Bank Transfer">Corporate Bank Transfer</option>
-                            <option value="Manager Out of Pocket">Manager (Out of Pocket / Reimburse)</option>
+                            <option value="Cash">Cash (From Cashier's Drawer)</option>
+                            <option value="Transfer">Corporate Bank Transfer</option>
+                            {/* <option value="Manager Out of Pocket">Manager (Out of Pocket / Reimburse)</option> */}
                         </select>
-                        {formData.payment_method === 'Cash from Drawer' && (
+                        {formData.payment_method === 'Cash' && (
                             <p className="text-[11px] text-orange-600 mt-1 font-bold">⚠️ Deducted from today's expected cash.</p>
                         )}
                     </div>
