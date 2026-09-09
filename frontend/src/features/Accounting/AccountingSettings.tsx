@@ -73,7 +73,7 @@ const AccountingSettings: React.FC = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      await api.put('/accounting/settings/defaults/', defaultAccounts);
+      await api.patch('/accounting/settings/', {default_accounts: defaultAccounts});
       alert('✅ Default accounts updated successfully.');
     } catch (err: any) {
       alert(`Failed to save: ${err.response?.data?.message || err.message}`);
@@ -86,7 +86,7 @@ const AccountingSettings: React.FC = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      await api.put('/accounting/settings/codes/', typeCodes);
+      await api.put('/accounting/settings/', {account_type_codes: typeCodes});
       alert('✅ Account type codes updated successfully.');
     } catch (err: any) {
       alert(`Failed to save: ${err.response?.data?.message || err.message}`);
