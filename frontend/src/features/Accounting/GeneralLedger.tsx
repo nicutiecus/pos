@@ -228,7 +228,7 @@ const GeneralLedger: React.FC = () => {
               rowSelection="single"
               pagination={true}
               paginationPageSize={50}
-              defaultColDef={{
+              defaultColDef={{ 
                 resizable: true,
                 sortable: true,
                 filter: true,

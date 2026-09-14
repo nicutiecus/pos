@@ -9,11 +9,12 @@ interface AccountOption {
 }
 
 interface DefaultAccounts {
-  inventory_account_id: string;
-  accounts_receivable_id: string;
-  accounts_payable_id: string;
-  sales_revenue_id: string;
-  cogs_account_id: string; // Cost of Goods Sold
+  default_inventory_account: string;
+  default_ar_account: string;
+  default_ap_account: string;
+  default_sales_account: string;
+  default_cogs_account: string; // Cost of Goods Sold
+  //default_expenses_account: string;
 }
 
 interface AccountTypeCodes {
@@ -32,11 +33,11 @@ const AccountingSettings: React.FC = () => {
   // Form States
   const [availableAccounts, setAvailableAccounts] = useState<AccountOption[]>([]);
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccounts>({
-    inventory_account_id: '',
-    accounts_receivable_id: '',
-    accounts_payable_id: '',
-    sales_revenue_id: '',
-    cogs_account_id: ''
+    default_inventory_account: '',
+    default_ar_account: '',
+    default_ap_account: '',
+    default_sales_account: '',
+    default_cogs_account: ''
   });
   const [typeCodes, setTypeCodes] = useState<AccountTypeCodes>({
     asset_prefix: '1000',
@@ -56,8 +57,22 @@ const AccountingSettings: React.FC = () => {
 
         // Fetch current accounting settings
         const settingsRes = await api.get('/accounting/settings/');
-        setDefaultAccounts(settingsRes.data.default_accounts || {});
-        setTypeCodes(settingsRes.data.account_type_codes || {});
+        const data = settingsRes.data || {};
+        // Safely map and convert to strings to ensure strict matching with <select> options
+        setDefaultAccounts({
+          default_inventory_account: data.default_inventory_account?.toString() || '',
+          default_ar_account: data.default_ar_account?.toString() || '',
+          default_ap_account: data.default_ap_account?.toString() || '',
+          default_sales_account: data.default_sales_account?.toString() || '',
+          default_cogs_account: data.default_cogs_account?.toString() || ''
+        });
+        setTypeCodes(settingsRes.data.account_type_codes || {
+        asset_prefix: data.asset_prefix || '1000',
+        liability_prefix: data.liability_prefix || '2000',
+        equity_prefix: data.equity_prefix || '3000',
+        revenue_prefix: data.revenue_prefix || '4000',
+        expense_prefix: data.expense_prefix || '5000'
+        });
       } catch (err) {
         console.error("Failed to load accounting settings", err);
       } finally {
@@ -73,7 +88,7 @@ const AccountingSettings: React.FC = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      await api.patch('/accounting/settings/', {default_accounts: defaultAccounts});
+      await api.patch('/accounting/settings/', defaultAccounts);
       alert('✅ Default accounts updated successfully.');
     } catch (err: any) {
       alert(`Failed to save: ${err.response?.data?.message || err.message}`);
@@ -134,13 +149,13 @@ const AccountingSettings: React.FC = () => {
                 <label className="block text-sm font-bold text-gray-700 mb-1">Accounts Receivable</label>
                 <p className="text-xs text-gray-500 mb-2">Default ledger for customer debts.</p>
                 <select 
-                  value={defaultAccounts.accounts_receivable_id} 
-                  onChange={(e) => setDefaultAccounts({...defaultAccounts, accounts_receivable_id: e.target.value})}
+                  value={defaultAccounts.default_ar_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_ar_account: e.target.value})}
                   className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                 >
                   <option value="">Select Account...</option>
                   {availableAccounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
                   ))}
                 </select>
               </div>
@@ -149,13 +164,13 @@ const AccountingSettings: React.FC = () => {
                 <label className="block text-sm font-bold text-gray-700 mb-1">Accounts Payable</label>
                 <p className="text-xs text-gray-500 mb-2">Default ledger for vendor debts.</p>
                 <select 
-                  value={defaultAccounts.accounts_payable_id} 
-                  onChange={(e) => setDefaultAccounts({...defaultAccounts, accounts_payable_id: e.target.value})}
+                  value={defaultAccounts.default_ap_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_ap_account: e.target.value})}
                   className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                 >
                   <option value="">Select Account...</option>
                   {availableAccounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
                   ))}
                 </select>
               </div>
@@ -164,13 +179,13 @@ const AccountingSettings: React.FC = () => {
                 <label className="block text-sm font-bold text-gray-700 mb-1">Inventory Asset</label>
                 <p className="text-xs text-gray-500 mb-2">Holds the value of physical stock on hand.</p>
                 <select 
-                  value={defaultAccounts.inventory_account_id} 
-                  onChange={(e) => setDefaultAccounts({...defaultAccounts, inventory_account_id: e.target.value})}
+                  value={defaultAccounts.default_inventory_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_inventory_account: e.target.value})}
                   className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                 >
                   <option value="">Select Account...</option>
                   {availableAccounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
                   ))}
                 </select>
               </div>
@@ -179,16 +194,17 @@ const AccountingSettings: React.FC = () => {
                 <label className="block text-sm font-bold text-gray-700 mb-1">Sales Revenue</label>
                 <p className="text-xs text-gray-500 mb-2">Default destination for point-of-sale income.</p>
                 <select 
-                  value={defaultAccounts.sales_revenue_id} 
-                  onChange={(e) => setDefaultAccounts({...defaultAccounts, sales_revenue_id: e.target.value})}
+                  value={defaultAccounts.default_sales_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_sales_account: e.target.value})}
                   className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                 >
                   <option value="">Select Account...</option>
                   {availableAccounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
                   ))}
                 </select>
               </div>
+           
             </div>
 
             <div className="pt-4 flex justify-end">
