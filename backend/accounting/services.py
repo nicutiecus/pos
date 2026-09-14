@@ -192,11 +192,11 @@ def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount
         if amount > 0:
             payment_account = None
             if method == 'Cash':
-                payment_account = tenant.settings.default_cash_account
+                payment_account = settings.default_cash_account
             elif method == 'POS':
-                payment_account = tenant.settings.default_pos_account
+                payment_account = settings.default_pos_account
             elif method == 'Transfer':
-                payment_account = tenant.settings.default_transfer_account
+                payment_account = settings.default_transfer_account
             if not payment_account:
                 missing_accounts.append(f"{method} Payment")
             else:

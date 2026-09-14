@@ -27,6 +27,7 @@ const ChartOfAccounts: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -53,13 +54,16 @@ const ChartOfAccounts: React.FC = () => {
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMessage(false);
     try {
       await api.post('/accounting/accounts/', formData);
       setIsModalOpen(false);
       setFormData({ name: '', code: '', account_type: 'Asset', description: '', is_active: true });
       fetchAccounts(); 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to create account", err);
+      const apiError = err.response?.data?.error || err.response?.data?.message || "Failed to create account. The code might already exist.";
+      setErrorMessage(apiError);
       // Optional: Add toast/error notification here
     } finally {
       setIsSubmitting(false);
@@ -167,6 +171,12 @@ const ChartOfAccounts: React.FC = () => {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
             <h3 className="text-xl font-bold text-gray-800 mb-4">Create New Account</h3>
             <form onSubmit={handleCreateAccount} className="space-y-4">
+              {/* Error Message Display */}
+              {errorMessage && (
+                <div className="p-3 bg-red-50 text-red-600 text-sm font-bold rounded-lg border border-red-200">
+                  {errorMessage}
+                </div>
+              )}
               
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Account Name *</label>

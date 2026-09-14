@@ -14,7 +14,13 @@ interface DefaultAccounts {
   default_ap_account: string;
   default_sales_account: string;
   default_cogs_account: string; // Cost of Goods Sold
-  //default_expenses_account: string;
+  default_cash_account: string;
+  default_pos_account: string;
+  default_transfer_account: string;
+  default_discount_account: string;
+  default_inventory_loss_account: string;
+  default_inventory_in_transit_account: string;
+  
 }
 
 interface AccountTypeCodes {
@@ -37,7 +43,13 @@ const AccountingSettings: React.FC = () => {
     default_ar_account: '',
     default_ap_account: '',
     default_sales_account: '',
-    default_cogs_account: ''
+    default_cogs_account: '',
+    default_cash_account: '',
+    default_pos_account: '',
+    default_transfer_account: '',
+    default_discount_account:'',
+    default_inventory_loss_account: '',
+    default_inventory_in_transit_account: ''
   });
   const [typeCodes, setTypeCodes] = useState<AccountTypeCodes>({
     asset_prefix: '1000',
@@ -64,7 +76,14 @@ const AccountingSettings: React.FC = () => {
           default_ar_account: data.default_ar_account?.toString() || '',
           default_ap_account: data.default_ap_account?.toString() || '',
           default_sales_account: data.default_sales_account?.toString() || '',
-          default_cogs_account: data.default_cogs_account?.toString() || ''
+          default_cogs_account: data.default_cogs_account?.toString() || '',
+          default_cash_account: data.default_cash_account?.toString() || '',
+          default_pos_account: data.default_pos_account?.toString() || '',
+          default_transfer_account: data.default_transfer_account?.toString() || '',
+          default_discount_account: data.default_discount_account?.toString() || '',
+          default_inventory_in_transit_account: data.default_inventory_in_tranist_account?.toString() || '',
+          default_inventory_loss_account: data.default_inventory_loss_account?.toString() || '',
+
         });
         setTypeCodes(settingsRes.data.account_type_codes || {
         asset_prefix: data.asset_prefix || '1000',
@@ -88,7 +107,10 @@ const AccountingSettings: React.FC = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      await api.patch('/accounting/settings/', defaultAccounts);
+      const payload = Object.fromEntries(
+      Object.entries(defaultAccounts).map(([key, value]) => [key, value === '' ? null : value])
+    );
+      await api.patch('/accounting/settings/', payload);
       alert('✅ Default accounts updated successfully.');
     } catch (err: any) {
       alert(`Failed to save: ${err.response?.data?.message || err.message}`);
@@ -191,11 +213,116 @@ const AccountingSettings: React.FC = () => {
               </div>
 
               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Inventory Loss</label>
+                <p className="text-xs text-gray-500 mb-2">Holds the value of lost stock.</p>
+                <select 
+                  value={defaultAccounts.default_inventory_loss_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_inventory_loss_account: e.target.value})}
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                >
+                  <option value="">Select Account...</option>
+                  {availableAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Inventory In Transit</label>
+                <p className="text-xs text-gray-500 mb-2">Holds the value of stock being transferred</p>
+                <select 
+                  value={defaultAccounts.default_inventory_in_transit_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_inventory_in_transit_account: e.target.value})}
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                >
+                  <option value="">Select Account...</option>
+                  {availableAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Sales Revenue</label>
                 <p className="text-xs text-gray-500 mb-2">Default destination for point-of-sale income.</p>
                 <select 
                   value={defaultAccounts.default_sales_account || ''} 
                   onChange={(e) => setDefaultAccounts({...defaultAccounts, default_sales_account: e.target.value})}
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                >
+                  <option value="">Select Account...</option>
+                  {availableAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Sales Cash</label>
+                <p className="text-xs text-gray-500 mb-2">Default destination for cash in drawer</p>
+                <select 
+                  value={defaultAccounts.default_cash_account || ''}
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_cash_account: e.target.value})}
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                >
+                  <option value="">Select Account...</option>
+                  {availableAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Sales POS</label>
+                <p className="text-xs text-gray-500 mb-2">Default destination for money received via POS</p>
+                <select 
+                  value={defaultAccounts.default_pos_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_pos_account: e.target.value})}
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                >
+                  <option value="">Select Account...</option>
+                  {availableAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Sales Transfer</label>
+                <p className="text-xs text-gray-500 mb-2">Default destination for sales income received via bank transfer </p>
+                <select 
+                  value={defaultAccounts.default_transfer_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_transfer_account: e.target.value})}
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                >
+                  <option value="">Select Account...</option>
+                  {availableAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Cost of Goods</label>
+                <p className="text-xs text-gray-500 mb-2">Default destination for purchase expenses</p>
+                <select 
+                  value={defaultAccounts.default_cogs_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_cogs_account: e.target.value})}
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                >
+                  <option value="">Select Account...</option>
+                  {availableAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id.toString()}>{acc.code} - {acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1"> Sales Discount</label>
+                <p className="text-xs text-gray-500 mb-2">Default destination for disounts at sale </p>
+                <select 
+                  value={defaultAccounts.default_discount_account || ''} 
+                  onChange={(e) => setDefaultAccounts({...defaultAccounts, default_discount_account: e.target.value})}
                   className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                 >
                   <option value="">Select Account...</option>
