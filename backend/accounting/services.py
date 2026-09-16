@@ -274,11 +274,11 @@ def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_va
     if amount_paid > 0:
         payment_account = None
         if method == 'Cash':
-            payment_account = tenant.settings.default_cash_account
+            payment_account = settings.default_cash_account
         elif method == 'POS':
-            payment_account = tenant.settings.default_pos_account
+            payment_account = settings.default_pos_account
         elif method == 'Transfer':
-            payment_account = tenant.settings.default_transfer_account
+            payment_account = settings.default_transfer_account
         else:
             raise ValidationError(f"Unknown payment method: {payment_method}")
 
@@ -359,25 +359,24 @@ def record_supplier_payment_accounting(*, tenant, branch, payment_reference: str
     if not settings.default_ap_account:
         missing_accounts.append("Accounts Payable")
     else:
-        ap_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ap_account_code)
+        ap_account = settings.default_ap_account_code
     journal_lines.append({'account': ap_account, 'debit': amount, 'credit': Decimal('0.00')})
     
     # 2. Credit Payment Account (Asset decreases)
     method =payment_method
-    acc_code = None
+    payment_account = None
     if method == 'Cash':
-        acc_code = tenant.settings.default_cash_account
+        payment_account = settings.default_cash_account
     elif method == 'POS':
-        acc_code = tenant.settings.default_pos_account
+        payment_account = settings.default_pos_account
     elif method == 'Transfer':
-        acc_code = tenant.settings.default_transfer_account
+        payment_account = settings.default_transfer_account
     else:
         raise ValidationError(f"Unknown payment method: {payment_method}")
 
-    if not acc_code:
+    if not payment_account:
         missing_accounts.append(f"{method} Account")
     else:    
-        payment_account = Account.objects.get(tenant=tenant, code=acc_code)
         journal_lines.append({'account': payment_account, 'debit': Decimal('0.00'), 'credit': amount})
 
     if missing_accounts:
@@ -410,12 +409,12 @@ def record_transfer_initiation_accounting(*, tenant, source_branch, transfer_id:
     if not settings.default_inventory_in_transit_account:
         missing_accounts.append("Inventory In Transit")
     else:
-        transit_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_in_transit_account_code)
+        transit_account = settings.default_inventory_in_transit_account
 
     if not settings.default_inventory_account:
         missing_accounts.append("Inventory Account")
     else:
-        inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
+        inventory_account = settings.default_inventory_account
 
     if missing_accounts:
         warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
@@ -449,11 +448,11 @@ def record_transfer_acceptance_accounting(*, tenant, dest_branch, transfer_id: s
     if not settings.default_inventory_account:
         missing_accounts.append("Inventory Account")
     else:
-        inventory_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_account_code)
+        inventory_account = settings.default_inventory_account_code
     if not settings.default_transit_account:
         missing_accounts.append("Inventory In Transit Account")
     else:
-        transit_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_inventory_in_transit_account_code)
+        transit_account = settings.default_inventory_in_transit_account_code
 
     
     if missing_accounts:
@@ -535,11 +534,11 @@ def record_customer_debt_payment_accounting(*, tenant, branch, payment_reference
 
     payment_account = None
     if method == 'Cash':
-        payment_account = tenant.settings.default_cash_account
+        payment_account = settings.default_cash_account
     elif method == 'POS':
-        payment_account = tenant.settings.default_pos_account
+        payment_account = settings.default_pos_account
     elif method == 'Transfer':
-        payment_account = tenant.settings.default_transfer_account
+        payment_account = settings.default_transfer_account
     else:
         raise ValidationError(f"Unknown payment method: {payment_method}")
 
@@ -552,7 +551,7 @@ def record_customer_debt_payment_accounting(*, tenant, branch, payment_reference
     if not settings.default_ar_account:
         missing_accounts.append("Accounts Receivable")
     else:
-        ar_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_ar_account_code)
+        ar_account = settings.default_ar_account
         journal_lines.append({'account': ar_account, 'debit': Decimal('0.00'), 'credit': amount})
 
     
@@ -591,7 +590,7 @@ def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_a
     if not settings.default_sales_account:
         missing_accounts.append("")
     else:
-        revenue_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_sales_account_code)
+        revenue_account = settings.default_sales_account
         journal_lines.append({'account': revenue_account, 'debit': gross_revenue, 'credit': Decimal('0.00')})
 
     # 2. Credit Sales Discounts (Reverse Contra-Revenue)
@@ -599,7 +598,7 @@ def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_a
         if not settings.default_discount_account:
             missing_accounts.append("Discount Account")
         else:
-            discount_account = Account.objects.get(tenant=tenant, code=tenant.settings.default_discount_account_code)
+            discount_account = settings.default_discount_account
             journal_lines.append({'account': discount_account, 'debit': Decimal('0.00'), 'credit': order.discount_amount})
 
     # 3. Credit Payments (Reverse Cash, POS, Transfer)
@@ -611,11 +610,11 @@ def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_a
 
         if amount > 0:
             if method == 'Cash':
-                payment_account = tenant.settings.default_cash_account
+                payment_account = settings.default_cash_account
             elif method == 'POS':
-                payment_account = tenant.settings.default_pos_account
+                payment_account = settings.default_pos_account
             elif method == 'Transfer':
-                payment_account = tenant.settings.default_transfer_account
+                payment_account = settings.default_transfer_account
             else:
                 raise ValidationError(f"Unknown payment method: {method}")
 

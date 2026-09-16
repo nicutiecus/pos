@@ -55,4 +55,5 @@ class ExpenseCategoryApi(views.APIView):
             is_active=True
         ).values('id', 'name')
         
+        
         return Response(list(categories), status=status.HTTP_200_OK)
