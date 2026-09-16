@@ -448,11 +448,11 @@ def record_transfer_acceptance_accounting(*, tenant, dest_branch, transfer_id: s
     if not settings.default_inventory_account:
         missing_accounts.append("Inventory Account")
     else:
-        inventory_account = settings.default_inventory_account_code
-    if not settings.default_transit_account:
+        inventory_account = settings.default_inventory_account
+    if not settings.default_inventory_in_transit_account:
         missing_accounts.append("Inventory In Transit Account")
     else:
-        transit_account = settings.default_inventory_in_transit_account_code
+        transit_account = settings.default_inventory_in_transit_account
 
     
     if missing_accounts:
