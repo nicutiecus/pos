@@ -253,18 +253,18 @@ def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_va
     missing_accounts= []
     
     # 1. Debit Inventory (Asset increases)
-    if not settings.default_inventory_account:
+    inventory_account = settings.default_inventory_account
+    if not inventory_account:
         missing_accounts.append("Inventory Account")
-    else:
-        inventory_account = settings.default_inventory_account
+    else:  
         journal_lines.append({'account': inventory_account, 'debit': total_value, 'credit': Decimal('0.00')})
     
     # 2. Credit Accounts Payable (Liability increases for unpaid portions)
     if debt_amount > 0:
+        ap_account = settings.default_ap_account_code
         if not settings.deafult_ap_account:
             missing_accounts.append("Accounts Payable")
-        else:
-            ap_account = settings.default_ap_account_code
+        else:            
             journal_lines.append({'account': ap_account, 'debit': Decimal('0.00'), 'credit': debt_amount})
 
       
@@ -356,11 +356,11 @@ def record_supplier_payment_accounting(*, tenant, branch, payment_reference: str
     missing_accounts =[]
     
     # 1. Debit Accounts Payable (Liability decreases)
-    if not settings.default_ap_account:
+    ap_account = settings.default_ap_account
+    if not ap_account:
         missing_accounts.append("Accounts Payable")
     else:
-        ap_account = settings.default_ap_account_code
-    journal_lines.append({'account': ap_account, 'debit': amount, 'credit': Decimal('0.00')})
+        journal_lines.append({'account': ap_account, 'debit': amount, 'credit': Decimal('0.00')})
     
     # 2. Credit Payment Account (Asset decreases)
     method =payment_method
@@ -406,15 +406,14 @@ def record_transfer_initiation_accounting(*, tenant, source_branch, transfer_id:
         return
 
     missing_accounts = []
-    if not settings.default_inventory_in_transit_account:
+    transit_account = settings.default_inventory_in_transit_account
+    if not transit_account:
         missing_accounts.append("Inventory In Transit")
-    else:
-        transit_account = settings.default_inventory_in_transit_account
-
+    
+    inventory_account = settings.default_inventory_account
     if not settings.default_inventory_account:
         missing_accounts.append("Inventory Account")
-    else:
-        inventory_account = settings.default_inventory_account
+    
 
     if missing_accounts:
         warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
@@ -445,14 +444,14 @@ def record_transfer_acceptance_accounting(*, tenant, dest_branch, transfer_id: s
 
     missing_accounts=[]
 
+    inventory_account = settings.default_inventory_account 
     if not settings.default_inventory_account:
         missing_accounts.append("Inventory Account")
-    else:
-        inventory_account = settings.default_inventory_account
+    
+    transit_account = settings.default_inventory_in_transit_account
     if not settings.default_inventory_in_transit_account:
         missing_accounts.append("Inventory In Transit Account")
-    else:
-        transit_account = settings.default_inventory_in_transit_account
+
 
     
     if missing_accounts:
