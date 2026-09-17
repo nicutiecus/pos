@@ -261,7 +261,7 @@ def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_va
     
     # 2. Credit Accounts Payable (Liability increases for unpaid portions)
     if debt_amount > 0:
-        ap_account = settings.default_ap_account_code
+        ap_account = settings.default_ap_account
         if not settings.deafult_ap_account:
             missing_accounts.append("Accounts Payable")
         else:            
@@ -316,15 +316,14 @@ def record_stock_removal_accounting(*, tenant, branch, reference_id: str, loss_v
 
     missing_accounts= []
 
+    inventory_account = settings.default_inventory_account
     if not settings.default_inventory_account:
         missing_accounts.append("Inventory Account")
-    else:
-        inventory_account = settings.default_inventory_account
+
+    loss_account = settings.default_inventory_loss_account
     if not settings.default_inventory_loss_account:
         missing_accounts.append("Inventory Loss Account")
-    else:
-        loss_account = settings.default_inventory_loss_account
-
+    
     
     if missing_accounts:
         warning_msg = f"Sale recorded, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
