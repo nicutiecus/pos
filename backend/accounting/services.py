@@ -262,7 +262,7 @@ def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_va
     # 2. Credit Accounts Payable (Liability increases for unpaid portions)
     if debt_amount > 0:
         ap_account = settings.default_ap_account
-        if not settings.deafult_ap_account:
+        if not ap_account:
             missing_accounts.append("Accounts Payable")
         else:            
             journal_lines.append({'account': ap_account, 'debit': Decimal('0.00'), 'credit': debt_amount})
