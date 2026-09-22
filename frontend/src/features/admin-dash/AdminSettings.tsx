@@ -10,6 +10,7 @@ interface TenantSettings {
   contact_phone: string;
   contact_email: string;
   business_address: string;
+  allow_overpayment: boolean;
 }
 
 const AdminSettings: React.FC = () => {
@@ -21,6 +22,7 @@ const AdminSettings: React.FC = () => {
     contact_phone: '',
     contact_email: '',
     business_address: '',
+    allow_overpayment: false,
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +45,7 @@ const AdminSettings: React.FC = () => {
             contact_phone: data.contact_phone || '',
             contact_email: data.contact_email || '',
             business_address: data.business_address || '',
+            allow_overpayment: Boolean(data.allow_overpayment),
           });
         }
       } catch (err) {
@@ -68,7 +71,7 @@ const AdminSettings: React.FC = () => {
     setFeedback(null);
 
     try {
-      // Depending on your backend, this might be a POST, PUT, or PATCH request. 
+     
       // Using PATCH is standard for updating specific fields in a settings singleton.
       await api.patch('/common/settings/', formData);
       
@@ -189,6 +192,32 @@ const AdminSettings: React.FC = () => {
               rows={2}
             />
           </div>
+        </div>
+
+        {/* Section 2: POS Payment Settings */}
+        <div className="bg-gray-50 p-4 border-b border-gray-200">
+          <h3 className="font-bold text-gray-800">POS Payment Settings</h3>
+        </div>
+        <div className="p-6 border-b border-gray-100">
+          <label className="flex items-start gap-4 cursor-pointer">
+            <input
+              type="checkbox"
+              name="allow_overpayment"
+              checked={formData.allow_overpayment}
+              onChange={handleChange}
+              className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div>
+              <div className="font-bold text-gray-800">Allow customer overpayment and cash change</div>
+              <p className="text-sm text-gray-500 mt-1">
+                When enabled, cashiers can accept more than the transaction total and return the difference as cash change.
+                Overpayment is not accepted when there is not enough cash in the payment to cover the change.
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                Transfer and POS payments never generate change.
+              </p>
+            </div>
+          </label>
         </div>
 
         {/* Section 2: Receipt Settings */}

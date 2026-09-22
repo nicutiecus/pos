@@ -22,5 +22,5 @@ class TenantSettingsSerializer(serializers.ModelSerializer):
         model = TenantSettings
         fields = [
             'business_name', 'address', 'phone', 'email',
-            'currency_symbol', 'tax_rate', 'receipt_footer'
+            'currency_symbol', 'tax_rate', 'receipt_footer', 'allow_overpayment',
         ]

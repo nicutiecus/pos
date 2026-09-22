@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from .selectors import (get_transfer_destination_branches, 
                         get_branches_for_tenant, get_tenant_settings)
 from .serializers import BranchSerializer, TenantSettingsSerializer
+from users.permissions import IsTenantAdmin
 
 class BranchListApi(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -24,6 +25,14 @@ class TenantSettingsApi(views.APIView):
         return Response(serializer.data)
 
     def patch(self, request):
+        if not (
+            request.user.is_superuser
+            or request.user.role in ['Admin', 'Tenant_Admin']
+        ):
+            return Response(
+                {"detail": "You do not have permission to modify tenant settings."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         # We use 'put' to update the existing settings object
         settings = get_tenant_settings(user=request.user)
         

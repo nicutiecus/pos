@@ -47,11 +47,32 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([{ method: 'Cash', amount: finalTotal }]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCreditSale, setIsCreditSale] = useState(false);
+  const [allowOverpayment, setAllowOverpayment] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   // --- Calculations ---
   const totalPaid = paymentLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
   const balance = finalTotal - totalPaid;
-  //idempoteny
+  const overpayment = Math.max(totalPaid - finalTotal, 0);
+  const cashTendered = paymentLines
+    .filter(line => line.method === 'Cash')
+    .reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const canGiveChange = overpayment > 0 && allowOverpayment && cashTendered >= overpayment;
+  const hasInvalidOverpayment = overpayment > 0 && (
+    !allowOverpayment ||
+    isCreditSale ||
+    cashTendered < overpayment
+  );
+  const overpaymentError = overpayment <= 0
+    ? ''
+    : isCreditSale
+    ? 'Overpayment is not available on Credit Sales.'
+    : !allowOverpayment
+    ? 'This business does not allow overpayment.'
+    : cashTendered < overpayment
+    ? `Cash tendered is insufficient for the ₦${overpayment.toLocaleString()} change due.`
+    : '';
+  // idempotency
   const idempotencyKey = crypto.randomUUID();
 
   // --- Fetch Customers ---
@@ -67,6 +88,25 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
       }
     };
     fetchCustomers();
+  }, []);
+
+  // --- Fetch Tenant POS Settings ---
+  useEffect(() => {
+    const fetchTenantSettings = async () => {
+      try {
+        const res = await api.get('/common/settings/');
+        const data = Array.isArray(res.data) ? res.data[0] : res.data;
+        setAllowOverpayment(Boolean(data?.allow_overpayment));
+      } catch (err) {
+        console.error('Failed to load tenant settings', err);
+        // Safe default: reject overpayment if settings cannot be loaded.
+        setAllowOverpayment(false);
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+
+    fetchTenantSettings();
   }, []);
 
   // --- Handlers ---
@@ -115,46 +155,72 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
   };
 
   const handleCheckout = async () => {
-    if (balance > 0 && !isCreditSale) {
-        alert("Full payment is required unless it is a Credit Sale.");
-        return;
+    if (isLoadingSettings) {
+      alert('Loading payment settings. Please try again in a moment.');
+      return;
+    }
+
+    // Underpayment is only valid for a credit sale.
+    if (totalPaid < finalTotal && !isCreditSale) {
+      alert('Full payment is required unless it is a Credit Sale.');
+      return;
     }
 
     if (isCreditSale && !selectedCustomer) {
-        alert("A customer must be selected for a Credit Sale.");
+      alert('A customer must be selected for a Credit Sale.');
+      return;
+    }
+
+    // Overpayment rules are tenant-specific.
+    if (overpayment > 0) {
+      if (isCreditSale) {
+        alert('Overpayment is not available on Credit Sales.');
         return;
+      }
+
+      if (!allowOverpayment) {
+        alert(
+          `This business does not allow overpayment. Maximum payment is ₦${finalTotal.toLocaleString()}.`
+        );
+        return;
+      }
+
+      // Change can only come from cash.
+      if (cashTendered < overpayment) {
+        alert(
+          `Overpayment requires cash change. Cash tendered is ₦${cashTendered.toLocaleString()}, ` +
+          `but change due is ₦${overpayment.toLocaleString()}.`
+        );
+        return;
+      }
     }
 
     if (isCreditSale && selectedCustomer && (Number(selectedCustomer.current_debt) + balance > Number(selectedCustomer.credit_limit))) {
-        alert(`This credit sale exceeds ${selectedCustomer.name}'s credit limit of ₦${selectedCustomer.credit_limit.toLocaleString()}`);
-        return;
+      alert(`This credit sale exceeds ${selectedCustomer.name}'s credit limit of ₦${selectedCustomer.credit_limit.toLocaleString()}`);
+      return;
     }
 
     setIsProcessing(true);
 
-    // --- FIX 1 & 2: DEDUCT CHANGE FROM CASH & UPPERCASE METHOD ---
-    const changeDue = balance < 0 ? Math.abs(balance) : 0;
-    let remainingChangeToDeduct = changeDue;
+    // When overpayment is allowed, deduct the change ONLY from Cash payment lines.
+    let remainingChangeToDeduct = canGiveChange ? overpayment : 0;
 
-    const formattedPayments = paymentLines.map(p => {
-        let finalAmount = Number(p.amount);
+    const formattedPayments = paymentLines
+      .map(p => {
+        let amount = Number(p.amount);
 
-        // We only give physical change out of Cash payments!
         if (p.method === 'Cash' && remainingChangeToDeduct > 0) {
-            if (finalAmount >= remainingChangeToDeduct) {
-                finalAmount -= remainingChangeToDeduct;
-                remainingChangeToDeduct = 0;
-            } else {
-                remainingChangeToDeduct -= finalAmount;
-                finalAmount = 0;
-            }
+          const deduction = Math.min(amount, remainingChangeToDeduct);
+          amount -= deduction;
+          remainingChangeToDeduct -= deduction;
         }
 
         return {
-            method: p.method,
-            amount: finalAmount
+          method: p.method,
+          amount
         };
-    }).filter(p => p.amount > 0); // Remove any payment lines that became 0
+      })
+      .filter(p => p.amount > 0);
 
     const payload = {
         branch_id: localStorage.getItem('branchId'),
@@ -362,7 +428,11 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
                                 min="0"
                                 value={line.amount === 0 ? '' : line.amount} 
                                 onChange={e => handleUpdatePaymentLine(index, 'amount', Number(e.target.value))}
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 font-black text-gray-900 text-lg"
+                                className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 font-black text-gray-900 text-lg ${
+                                   hasInvalidOverpayment && Number(line.amount || 0) > 0
+                                     ? 'border-red-400'
+                                     : 'border-gray-300'
+                                 }`}
                                 placeholder="0"
                             />
                         </div>
@@ -378,6 +448,12 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
                     </div>
                 ))}
 
+                {overpaymentError && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                        {overpaymentError}
+                    </div>
+                )}
+
                 {!isCreditSale && balance > 0 && (
                     <button 
                         onClick={handleAddPaymentLine}
@@ -391,12 +467,37 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
             <div className="mt-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
                 <div className="flex justify-between text-gray-500 text-sm font-bold">
                     <span>Total Tendered</span>
-                    <span>- ₦{totalPaid.toLocaleString()}</span>
+                    <span>₦{totalPaid.toLocaleString()}</span>
                 </div>
-                <div className={`flex justify-between text-lg font-bold border-t border-dashed border-gray-300 pt-2 ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    <span>{balance > 0 ? 'Balance (Credit)' : 'Change Due'}</span>
-                    <span>₦{Math.abs(balance).toLocaleString()}</span>
-                </div>
+
+                {balance > 0 ? (
+                    <div className="flex justify-between text-lg font-bold border-t border-dashed border-gray-300 pt-2 text-red-600">
+                        <span>{isCreditSale ? 'Balance (Credit)' : 'Balance Due'}</span>
+                        <span>₦{balance.toLocaleString()}</span>
+                    </div>
+                ) : balance < 0 ? (
+                    <div className={`flex justify-between text-lg font-bold border-t border-dashed border-gray-300 pt-2 ${allowOverpayment ? 'text-green-600' : 'text-red-600'}`}>
+                        <span>
+                            {isCreditSale
+                                ? 'Overpayment Not Allowed'
+                                : allowOverpayment
+                                ? 'Change Due'
+                                : 'Overpayment Not Allowed'}
+                        </span>
+                        <span>₦{Math.abs(balance).toLocaleString()}</span>
+                    </div>
+                ) : (
+                    <div className="flex justify-between text-lg font-bold border-t border-dashed border-gray-300 pt-2 text-green-600">
+                        <span>Payment Complete</span>
+                        <span>₦0</span>
+                    </div>
+                )}
+
+                {balance < 0 && allowOverpayment && (
+                    <div className="text-xs text-gray-500 pt-1">
+                        Change is returned from cash payments only.
+                    </div>
+                )}
             </div>
           </div>
 
@@ -409,14 +510,22 @@ const PaymentModal: React.FC<Props> = ({ total, discountAmount=0, onClose }) => 
             </button>
             <button 
                 onClick={handleCheckout}
-                disabled={isProcessing || (isCreditSale && !selectedCustomer)} 
+                disabled={isProcessing || isLoadingSettings || (isCreditSale && !selectedCustomer) || hasInvalidOverpayment} 
                 className={`flex-1 py-3 rounded-lg font-bold text-white shadow-lg transition-colors ${
                     isCreditSale 
                         ? 'bg-orange-500 hover:bg-orange-600' 
                         : 'bg-green-600 hover:bg-green-700'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-                {isProcessing ? 'Processing...' : isCreditSale ? 'Confirm Credit Sale' : 'Complete Transaction'}
+                {isProcessing
+                    ? 'Processing...'
+                    : isLoadingSettings
+                    ? 'Loading Settings...'
+                    : hasInvalidOverpayment
+                    ? 'Fix Payment Amount'
+                    : isCreditSale
+                    ? 'Confirm Credit Sale'
+                    : 'Complete Transaction'}
             </button>
         </div>
 

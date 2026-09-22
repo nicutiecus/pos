@@ -64,6 +64,12 @@ class TenantSettings(TenantAwareModel):
     # Receipt Customization
     receipt_footer = models.TextField(default="Thank you for your patronage!", blank=True)
 
+     # POS Payment Settings
+    allow_overpayment = models.BooleanField(
+        default=False,
+        help_text="Allow customers to tender more than the sale total and receive change in cash."
+    )
+
     void_approval_roles = models.JSONField(default=list, 
      help_text="List of roles allowed to approve voids, e.g., ['Admin', 'Branch_Manager']")
     

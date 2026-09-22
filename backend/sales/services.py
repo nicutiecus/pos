@@ -2,7 +2,8 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
-from common.models import Branch
+from common.models import Branch, TenantSettings
+from common.selectors import get_tenant_settings
 from inventory.models import Product, InventoryBatch, InventoryLog
 from sales.models import SalesOrder, SaleItem, Payment, Customer, CustomerLedger
 import random
@@ -172,31 +173,88 @@ def create_sale_service(
         
         # Calculate the final amount the customer actually needs to pay
         final_total_amount = calculated_subtotal - discount_amount
-        
+
+        tenant_settings = get_tenant_settings(user=user)
+
+        allow_overpayment = tenant_settings.allow_overpayment
         # ✅ Save the final total to the order shell so it persists in the database
         order.total_amount = final_total_amount
         # 4. Process Multiple Payments
         total_paid = Decimal('0.00')
-        
-        if payments:
-            for payment_data in payments:
-                amount = Decimal(str(payment_data['amount']))
-                method = payment_data['method']
-                ref = payment_data.get('reference_code', '')
+        cash_paid = Decimal('0.00')
 
-                if amount > 0:
-                    Payment.objects.create(
-                        tenant=user.tenant,
-                        branch=branch,
-                        order=order,
-                        method=method,
-                        amount=amount,
-                        reference_code=ref,
-                        processed_by=user
-                    )
-                    total_paid += amount
+        for payment_data in payments or []:
+            amount = Decimal(str(payment_data['amount']))
+            method = payment_data['method']
 
-        order.amount_paid = total_paid
+            if amount < 0:
+                raise ValidationError("Payment amount cannot be negative.")
+
+            total_paid += amount
+
+            if method == 'Cash':
+                cash_paid += amount
+        # Calculate the difference
+        payment_difference = total_paid - final_total_amount
+
+
+# ---------------------------------------------------------
+# OVERPAYMENT VALIDATION
+# ---------------------------------------------------------
+
+        if payment_difference > 0:
+
+            # Tenant does not allow overpayment
+            if not allow_overpayment:
+                raise ValidationError(
+                    f"Payment cannot exceed the transaction total of "
+                    f"₦{final_total_amount:,.2f}."
+                )
+
+            # Tenant allows overpayment, but change MUST come from cash
+            if cash_paid < payment_difference:
+                raise ValidationError(
+                    "Overpayment can only be returned as cash change. "
+                    "The cash portion of this payment is insufficient "
+                    f"to cover the ₦{payment_difference:,.2f} change."
+                )
+
+
+# ---------------------------------------------------------
+# CREATE PAYMENT RECORDS
+# ---------------------------------------------------------
+
+        change_due = max(payment_difference, Decimal('0.00'))
+        remaining_change = change_due
+
+        for payment_data in payments or []:
+            amount = Decimal(str(payment_data['amount']))
+            method = payment_data['method']
+
+            if amount <= 0:
+                continue
+
+            recorded_amount = amount
+
+            # Change can ONLY be deducted from Cash
+            if method == 'Cash' and remaining_change > 0:
+                cash_change = min(recorded_amount, remaining_change)
+
+                recorded_amount -= cash_change
+                remaining_change -= cash_change
+
+            # Do not create zero-value payment records
+            if recorded_amount > 0:
+                Payment.objects.create(
+                    tenant=user.tenant,
+                    branch=branch,
+                    order=order,
+                    method=method,
+                    amount=recorded_amount,
+                    reference_code=payment_data.get('reference_code', ''),
+                    processed_by=user
+                )
+        order.amount_paid = total_paid - change_due
 
         # Calculate Debt & Validate Credit Rules
         debt_amount = final_total_amount - total_paid
@@ -207,9 +265,11 @@ def create_sale_service(
                 f"Walk-in customers cannot take credit. Shortage: {debt_amount}"
             )
 
-        # Validation: Overpayment (Optional - prevent negative debt)
+        # Validation: Overpayment
         if debt_amount < 0:
-             debt_amount = Decimal('0.00')
+            raise ValidationError(
+                f"Payment cannot be higher than transaction total "
+            )
             
 
         # 6. Handle Debt (Credit Sale)
