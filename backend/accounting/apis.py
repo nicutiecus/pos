@@ -1,7 +1,9 @@
 from rest_framework import views, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import Sum, Q
 from django.core.exceptions import ValidationError
+from decimal import Decimal
 from users.permissions import IsTenantAdmin  
 from .models import Account, JournalEntry
 from .serializers import (AccountListSerializer, AccountCreateSerializer, AccountUpdateSerializer,
@@ -10,10 +12,10 @@ from .serializers import (AccountListSerializer, AccountCreateSerializer, Accoun
                           PayableSerializer, SupplierLedgerSerializer, ReportAccountSerializer,
                           AccountingSettingsSerializer)
 from .services import (create_account_service, update_account_service, create_manual_journal_entry,
-                       reverse_journal_entry_service)
+                       reverse_journal_entry_service, perform_year_end_close_service)
 from .selectors import (get_general_ledger, get_trial_balance, get_receivables, get_customer_ledger,
                         get_payables, get_supplier_ledger, get_cash_and_bank_balances, get_profit_and_loss,
-                        get_balance_sheet, get_cash_flow, get_tax_report, get_accounting_settings)
+                        get_balance_sheet, get_cash_flow, get_tax_report, get_opening_balance, get_accounting_settings)
 
 
 
@@ -126,6 +128,9 @@ class GeneralLedgerApi(views.APIView):
     permission_classes = [IsAuthenticated, IsTenantAdmin]
 
     def get(self, request):
+        account_id = request.query_params.get('account_id')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
         lines = get_general_ledger(
             tenant=request.user.tenant,
             start_date=request.query_params.get('start_date'),
@@ -133,7 +138,26 @@ class GeneralLedgerApi(views.APIView):
             account_id=request.query_params.get('account_id')
         )
         serializer = GeneralLedgerSerializer(lines, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        opening_balance = Decimal('0.00')
+        is_debit_normal = True
+        
+        if account_id and account_id != 'All':
+            opening_balance = get_opening_balance(
+                tenant=request.user.tenant, 
+                account_id=account_id, 
+                as_of_date=start_date
+            )
+            try:
+                acc = Account.objects.get(Q(id=account_id) | Q(code=account_id), tenant=request.user.tenant)
+                is_debit_normal = acc.account_type in ['Asset', 'Expense']
+            except Account.DoesNotExist:
+                pass
+
+        return Response({
+            "opening_balance": opening_balance,
+            "is_debit_normal": is_debit_normal,
+            "transactions": serializer.data
+        }, status=status.HTTP_200_OK)
 
 
 class TrialBalanceApi(views.APIView):
@@ -248,10 +272,7 @@ class CashFlowReportApi(views.APIView):
             start_date=request.query_params.get('start_date'),
             end_date=request.query_params.get('end_date')
         )
-        return Response({
-            "accounts": ReportAccountSerializer(data['accounts'], many=True).data,
-            "totals": data['totals']
-        }, status=status.HTTP_200_OK)
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class TaxReportApi(views.APIView):
@@ -263,7 +284,7 @@ class TaxReportApi(views.APIView):
             start_date=request.query_params.get('start_date'),
             end_date=request.query_params.get('end_date')
         )
-        data['tax_liability_accounts'] = ReportAccountSerializer(data['tax_liability_accounts'], many=True).data
+        
         return Response(data, status=status.HTTP_200_OK)
 
 
@@ -287,3 +308,20 @@ class AccountingSettingsApi(views.APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class YearEndCloseApi(views.APIView):
+    permission_classes = [IsAuthenticated, IsTenantAdmin]
+
+    def post(self, request, financial_year_id):
+        try:
+            closing_entry = perform_year_end_close_service(
+                user=request.user,
+                financial_year_id=financial_year_id
+            )
+            return Response({
+                "message": "Financial year closed successfully.",
+                "closing_entry_id": closing_entry.id
+            }, status=status.HTTP_200_OK)
+            
+        except ValidationError as e:
+            return Response({"error": getattr(e, 'message', str(e))}, status=status.HTTP_400_BAD_REQUEST)

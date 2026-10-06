@@ -1,10 +1,14 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import IntegrityError
+from django.utils import timezone
+from django.db.models import Sum, Q
+from django.db.models.functions import Coalesce
 from decimal import Decimal
-from .models import Account, JournalEntry, JournalEntryLine
+from .models import Account, JournalEntry, JournalEntryLine, AccountingPeriod, FinancialYear
 from common.models import Branch
 import logging
+
 
 
 
@@ -16,6 +20,7 @@ def create_account_service(
     name: str,
     code: str,
     account_type: str,
+    account_sub_type: str,
     description: str = "",
     is_active: bool = True
 ) -> Account:
@@ -46,6 +51,7 @@ def create_account_service(
         name=name.strip(),
         code=code.strip(),
         account_type=account_type,
+        account_sub_type= account_sub_type,
         description=description.strip(),
         is_active=is_active
     )
@@ -105,7 +111,7 @@ def update_account_service(
 
 
 @transaction.atomic
-def record_journal_entry(*, tenant, branch=None, reference_id=None, description: str, lines_data: list):
+def record_journal_entry(*, tenant, branch=None, reference_id=None, description: str, lines_data: list, posting_date =None):
     """
     Records a balanced journal entry.
     lines_data expected format:
@@ -114,6 +120,21 @@ def record_journal_entry(*, tenant, branch=None, reference_id=None, description:
         {'account': Account_Instance, 'debit': 0, 'credit': 5000},
     ]
     """
+    if not posting_date:
+        posting_date = timezone.now().date()
+
+    # 2. Strict Period Locking Validation
+    period = AccountingPeriod.objects.filter(
+        tenant=tenant,
+        start_date__lte=posting_date,
+        end_date__gte=posting_date
+    ).first()
+
+    if not period:
+        raise ValidationError(f"No financial period is configured for the date {posting_date}. Please set up your Financial Year.")
+    
+    if period.status == AccountingPeriod.Status.CLOSED:
+        raise ValidationError(f"The accounting period '{period.name}' is closed. You cannot post transactions to a closed period.")
     total_debit = Decimal('0.00')
     total_credit = Decimal('0.00')
 
@@ -133,7 +154,9 @@ def record_journal_entry(*, tenant, branch=None, reference_id=None, description:
         tenant=tenant,
         branch=branch,
         reference_id=reference_id,
-        description=description
+        description=description,
+        posting_date=posting_date,
+        period=period,
     )
 
     # Create the Lines
@@ -153,7 +176,7 @@ def record_journal_entry(*, tenant, branch=None, reference_id=None, description:
     return journal_entry
 
 
-def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount: Decimal, total_cost_of_sales: Decimal):
+def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount: Decimal, total_cost_of_sales: Decimal, posting_date=None):
     """
     Translates a SalesOrder into balanced journal entries.
     Handles Gross Revenue, Discounts (Contra-Revenue), Receivables, Payments, and COGS.
@@ -164,6 +187,9 @@ def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount
     except ObjectDoesNotExist:
         return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
 
+    if not posting_date:
+            posting_date=timezone.now().date()
+        
     journal_lines = []
     missing_accounts = []
     
@@ -239,7 +265,7 @@ def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount
 
 
 
-def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_value: Decimal, debt_amount: Decimal, amount_paid: Decimal, payment_method: str):
+def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_value: Decimal, debt_amount: Decimal, amount_paid: Decimal, payment_method: str, posting_date=None):
     """
     Translates a Purchase Invoice into balanced journal entries.
     Handles Inventory Assets, Accounts Payable, and Payment credits.
@@ -248,7 +274,10 @@ def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_va
         settings = tenant.accounting_settings
     except ObjectDoesNotExist:
         return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
-    
+
+    if not posting_date:
+        posting_date=timezone.now().date()
+        
     journal_lines = []
     missing_accounts= []
     
@@ -299,7 +328,8 @@ def record_stock_receipt_accounting(*, tenant, branch, invoice_id: str, total_va
         branch=branch,
         reference_id=invoice_id,
         description=f"Stock Received - Invoice #{invoice_id}",
-        lines_data=journal_lines
+        lines_data=journal_lines,
+        posting_date=posting_date
     )
 
 def record_stock_removal_accounting(*, tenant, branch, reference_id: str, loss_value: Decimal, reason: str):
@@ -342,7 +372,8 @@ def record_stock_removal_accounting(*, tenant, branch, reference_id: str, loss_v
     )
 
 
-def record_supplier_payment_accounting(*, tenant, branch, payment_reference: str, amount: Decimal, payment_method: str):
+def record_supplier_payment_accounting(*, tenant, branch, payment_reference: str, amount: Decimal, payment_method: str,
+                                       posting_date=None):
     """
     Translates a supplier debt payment into a balanced journal entry.
     Debits Accounts Payable and Credits the respective Payment Account (Cash/Bank).
@@ -351,6 +382,10 @@ def record_supplier_payment_accounting(*, tenant, branch, payment_reference: str
         settings = tenant.accounting_settings
     except ObjectDoesNotExist:
         return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
+
+    if not posting_date:
+        posting_date=timezone.now().date()
+        
     journal_lines = []
     missing_accounts =[]
     
@@ -388,11 +423,12 @@ def record_supplier_payment_accounting(*, tenant, branch, payment_reference: str
         branch=branch,
         reference_id=payment_reference,
         description=f"Supplier Debt Payment - Ref #{payment_reference}",
-        lines_data=journal_lines
+        lines_data=journal_lines,
+        posting_date=posting_date
     )
 
 
-def record_transfer_initiation_accounting(*, tenant, source_branch, transfer_id: str, total_value: Decimal):
+def record_transfer_initiation_accounting(*, tenant, source_branch, transfer_id: str, total_value: Decimal, posting_date=None):
     """
     Records the financial movement of stock from the source branch into transit.
     """
@@ -404,6 +440,9 @@ def record_transfer_initiation_accounting(*, tenant, source_branch, transfer_id:
     if total_value <= 0:
         return
 
+    if not posting_date:
+        posting_date=timezone.now().date()
+        
     missing_accounts = []
     transit_account = settings.default_inventory_in_transit_account
     if not transit_account:
@@ -427,10 +466,11 @@ def record_transfer_initiation_accounting(*, tenant, source_branch, transfer_id:
         lines_data=[
             {'account': transit_account, 'debit': total_value, 'credit': Decimal('0.00')},
             {'account': inventory_account, 'debit': Decimal('0.00'), 'credit': total_value},
-        ]
+        ],
+        posting_date=posting_date
     )
 
-def record_transfer_acceptance_accounting(*, tenant, dest_branch, transfer_id: str, total_value: Decimal):
+def record_transfer_acceptance_accounting(*, tenant, dest_branch, transfer_id: str, total_value: Decimal, posting_date=None):
     """
     Records the financial arrival of stock at the destination branch.
     """
@@ -441,6 +481,9 @@ def record_transfer_acceptance_accounting(*, tenant, dest_branch, transfer_id: s
     except ObjectDoesNotExist:
         return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
 
+    if not posting_date:
+        posting_date=timezone.now().date()
+        
     missing_accounts=[]
 
     inventory_account = settings.default_inventory_account 
@@ -467,10 +510,11 @@ def record_transfer_acceptance_accounting(*, tenant, dest_branch, transfer_id: s
         lines_data=[
             {'account': inventory_account, 'debit': total_value, 'credit': Decimal('0.00')},
             {'account': transit_account, 'debit': Decimal('0.00'), 'credit': total_value},
-        ]
+        ],
+        posting_date=posting_date
     )
 
-def record_transfer_rejection_accounting(*, tenant, source_branch, transfer_id: str, total_value: Decimal):
+def record_transfer_rejection_accounting(*, tenant, source_branch, transfer_id: str, total_value: Decimal, posting_date=None):
     """
     Records the financial return of rejected stock back to the source branch.
     """
@@ -482,6 +526,9 @@ def record_transfer_rejection_accounting(*, tenant, source_branch, transfer_id: 
     except ObjectDoesNotExist:
         return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
 
+    if not posting_date:
+            posting_date=timezone.now().date()
+        
     missing_accounts=[]
 
     if not settings.default_inventory_account:
@@ -509,11 +556,13 @@ def record_transfer_rejection_accounting(*, tenant, source_branch, transfer_id: 
         lines_data=[
             {'account': inventory_account, 'debit': total_value, 'credit': Decimal('0.00')},
             {'account': transit_account, 'debit': Decimal('0.00'), 'credit': total_value},
-        ]
+        ],
+        posting_date=posting_date
     )
 
 
-def record_customer_debt_payment_accounting(*, tenant, branch, payment_reference: str, amount: Decimal, payment_method: str):
+def record_customer_debt_payment_accounting(*, tenant, branch, payment_reference: str, 
+                                            amount: Decimal, payment_method: str, posting_date=None):
     """
     Translates a customer debt payment into a balanced journal entry.
     Debits the Payment Account (Cash/Bank) and Credits Accounts Receivable.
@@ -522,7 +571,8 @@ def record_customer_debt_payment_accounting(*, tenant, branch, payment_reference
         settings = tenant.accounting_settings
     except ObjectDoesNotExist:
         return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
-    
+    if not posting_date:
+        posting_date=timezone.now().date()
     
     journal_lines = []
     missing_accounts = []
@@ -563,11 +613,13 @@ def record_customer_debt_payment_accounting(*, tenant, branch, payment_reference
         branch=branch,
         reference_id=payment_reference,
         description=f"Customer Debt Payment - Ref #{payment_reference}",
-        lines_data=journal_lines
+        lines_data=journal_lines,
+        posting_date=posting_date
     )
 
 
-def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_amount: Decimal, total_cost_of_sales: Decimal):
+def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_amount: Decimal, 
+                                total_cost_of_sales: Decimal, posting_date=None):
     """
     Reverses the financial impact of a sales order.
     Debits Revenue, Credits Payments/Receivables, and reverses COGS.
@@ -576,7 +628,9 @@ def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_a
         settings = tenant.accounting_settings
     except ObjectDoesNotExist:
         return {"success": False, "warning" :"Accounting settings are not initialized for this tenant"}
-        
+
+    if not posting_date:
+        posting_date=timezone.now().date()
     
     journal_lines = []
     missing_accounts = []
@@ -655,7 +709,8 @@ def record_void_sale_accounting(*, tenant, branch, order, payments: list, debt_a
         branch=branch,
         reference_id=f"VOID-{order.id}",
         description=f"Voided Sales Order #{order.id}",
-        lines_data=journal_lines
+        lines_data=journal_lines,
+        posting_date=posting_date
     )
 
 
@@ -667,7 +722,8 @@ def record_expense_accounting(
     amount: Decimal, 
     expense_account: Account,
     payment_method: str, 
-    description: str
+    description: str,
+    posting_date=None
 ):
     """
     Translates a mapped expense into a balanced journal entry.
@@ -676,7 +732,8 @@ def record_expense_accounting(
         settings = tenant.accounting_settings
     except ObjectDoesNotExist:
         return {"success": False, "warning": "Accounting settings are not initialized for this tenant"}
-
+    if not posting_date:
+        posting_date=timezone.now().date()
     journal_lines = []
     missing_accounts = []
     
@@ -711,12 +768,13 @@ def record_expense_accounting(
         branch=branch,
         reference_id=f"EXP-{expense_id}",
         description=f"Expense: {description}",
-        lines_data=journal_lines
+        lines_data=journal_lines,
+        posting_date=posting_date
     )
 
 
 @transaction.atomic
-def create_manual_journal_entry(*, user, reference_id: str = None, description: str, branch_id=None, lines: list):
+def create_manual_journal_entry(*, user, reference_id: str = None, description: str, branch_id=None, lines: list, posting_date=None):
     """
     Validates and constructs a manual journal entry from API data.
     """
@@ -726,6 +784,9 @@ def create_manual_journal_entry(*, user, reference_id: str = None, description: 
             branch = Branch.objects.get(id=branch_id, tenant=user.tenant)
         except Branch.DoesNotExist:
             raise ValidationError("Branch not found or you lack permission to access it.")
+
+    if not posting_date:
+        posting_date=timezone.now().date()
 
     lines_data = []
     for line in lines:
@@ -746,7 +807,8 @@ def create_manual_journal_entry(*, user, reference_id: str = None, description: 
         branch=branch,
         reference_id=reference_id,
         description=description,
-        lines_data=lines_data
+        lines_data=lines_data,
+        posting_date=posting_date
     )
 
 @transaction.atomic
@@ -804,3 +866,105 @@ def reverse_debt_payment_journal_service(*, tenant, payment, user, reason: str =
         # If no GL entry was created for the original payment (e.g., legacy data), 
         # fail silently or log the anomaly depending on system strictness.
         pass
+
+
+@transaction.atomic
+def perform_year_end_close_service(*, user, financial_year_id: int):
+    """
+    Zeroes out all Revenue and Expense accounts for the given financial year,
+    posts the net income to Retained Earnings, and locks the periods.
+    """
+    # 1. Fetch and Lock the Financial Year
+    fy = FinancialYear.objects.select_for_update().get(id=financial_year_id, tenant=user.tenant)
+    
+    if fy.is_closed:
+        raise ValidationError(f"Financial year '{fy.name}' is already closed.")
+        
+    settings = getattr(user.tenant, 'accounting_settings', None)
+    if not settings or not settings.default_retained_earnings_account:
+        raise ValidationError("A Default Retained Earnings account must be configured in Accounting Settings before performing a year-end close.")
+        
+    retained_earnings_account = settings.default_retained_earnings_account
+
+    # 2. Fetch P&L Accounts (Revenues and Expenses)
+    pl_accounts = Account.objects.filter(
+        tenant=user.tenant, 
+        account_type__in=['Revenue', 'Expense']
+    )
+    
+    # 3. Calculate the net balance of each P&L account strictly within this Financial Year
+    lines_filter = Q(
+        journalentryline__journal_entry__date__gte=fy.start_date,
+        journalentryline__journal_entry__date__lte=fy.end_date,
+        journalentryline__journal_entry__tenant=user.tenant
+    )
+    
+    account_balances = pl_accounts.annotate(
+        total_debit=Coalesce(Sum('journalentryline__debit', filter=lines_filter), Decimal('0.00')),
+        total_credit=Coalesce(Sum('journalentryline__credit', filter=lines_filter), Decimal('0.00'))
+    )
+    
+    closing_lines = []
+    net_income = Decimal('0.00')
+    
+    # 4. Generate Reversing Lines
+    for acc in account_balances:
+        # Standardize balance (Credit - Debit). 
+        # Positive = Net Credit (typical for Revenue). Negative = Net Debit (typical for Expense).
+        balance = acc.total_credit - acc.total_debit 
+        
+        if balance == Decimal('0.00'):
+            continue
+            
+        net_income += balance
+        
+        if balance > 0:
+            # To zero out a Credit balance, we Debit it
+            closing_lines.append({
+                'account': acc,
+                'debit': balance,
+                'credit': Decimal('0.00')
+            })
+        elif balance < 0:
+            # To zero out a Debit balance, we Credit it
+            closing_lines.append({
+                'account': acc,
+                'debit': Decimal('0.00'),
+                'credit': abs(balance)
+            })
+            
+    if not closing_lines:
+        raise ValidationError("No revenue or expense transactions were found for this financial year.")
+        
+    # 5. Post the Net Offset to Retained Earnings
+    if net_income > 0:
+        # Profit: Credit Retained Earnings
+        closing_lines.append({
+            'account': retained_earnings_account,
+            'debit': Decimal('0.00'),
+            'credit': net_income
+        })
+    elif net_income < 0:
+        # Loss: Debit Retained Earnings
+        closing_lines.append({
+            'account': retained_earnings_account,
+            'debit': abs(net_income),
+            'credit': Decimal('0.00')
+        })
+        
+    # 6. Record the Closing Journal Entry
+    # This must run while the final period is still open
+    closing_entry = record_journal_entry(
+        tenant=user.tenant,
+        description=f"Year-End Close for {fy.name}",
+        lines_data=closing_lines,
+        posting_date=fy.end_date
+    )
+    
+    # 7. Lock the Financial Year and all related periods
+    fy.is_closed = True
+    fy.save(update_fields=['is_closed'])
+    
+    fy.periods.update(status=AccountingPeriod.Status.CLOSED)
+    
+    return closing_entry

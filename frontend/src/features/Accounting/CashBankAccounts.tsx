@@ -24,7 +24,7 @@ const CashBankAccounts: React.FC = () => {
   useEffect(() => {
     const fetchAccounts = async () => {
       try {
-        const response = await api.get('/accounting/cash-bank-accounts/');
+        const response = await api.get('/accounting/cash-bank/');
         setAccounts(response.data);
       } catch (err) {
         console.error("Failed to load cash and bank accounts", err);

@@ -1,10 +1,13 @@
 from django.db.models import Sum, Q
 from django.db.models.functions import Coalesce
+from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
-from .models import Account, JournalEntryLine, AccountingSettings
+from .models import Account, JournalEntryLine, AccountingSettings, JournalEntry
 from sales.models import Customer, CustomerLedger
 from inventory.models import Supplier, SupplierLedger
 from common.models import TenantSettings
+
+
 
 def get_general_ledger(*, tenant, start_date=None, end_date=None, account_id=None):
     """
@@ -17,9 +20,13 @@ def get_general_ledger(*, tenant, start_date=None, end_date=None, account_id=Non
     if end_date:
         filters &= Q(journal_entry__date__lte=end_date)
     if account_id:
-        filters &= Q(account_id=account_id)
+        # Try matching by ID first. If it's a non-numeric string (e.g. '400-A'), 
+        # it falls back to querying the code to avoid ValueError crashes.
+        if str(account_id).isdigit():
+            filters &= (Q(account_id=account_id) | Q(account__code=account_id))
+        else:
+            filters &= Q(account__code=account_id)
 
-    # select_related optimizes the query by fetching parent journal and account data in a single SQL join
     return JournalEntryLine.objects.filter(filters).select_related(
         'journal_entry', 'account', 'journal_entry__branch'
     ).order_by('journal_entry__date', 'id')
@@ -125,7 +132,7 @@ def get_profit_and_loss(*, tenant, start_date=None, end_date=None):
     total_revenue = sum(acc.total_credit - acc.total_debit for acc in revenues)
     
     # Separate COGS from standard expenses if possible by name/code heuristic
-    cogs_accounts = [acc for acc in expenses if 'cost of goods' in acc.name.lower() or 'cogs' in acc.name.lower()]
+    cogs_accounts = [acc for acc in expenses if acc.account_sub_type == 'Cost of Goods Sold']
     op_expenses = [acc for acc in expenses if acc not in cogs_accounts]
 
     total_cogs = sum(acc.total_debit - acc.total_credit for acc in cogs_accounts)
@@ -173,54 +180,158 @@ def get_balance_sheet(*, tenant, as_of_date=None):
             "total_liabilities_and_equity": total_liabilities + total_equity + retained_earnings
         }
     }
-
 def get_cash_flow(*, tenant, start_date=None, end_date=None):
-    """Summarizes total cash inflows and outflows."""
-    cash_accounts = get_cash_and_bank_balances(tenant=tenant, as_of_date=end_date)
-    
-    # Filter for the specific period to get net changes
-    period_cash = get_account_balances_by_type(
-        tenant=tenant, 
-        account_types=['Asset'], 
-        start_date=start_date, 
-        end_date=end_date
-    ).filter(id__in=[acc.id for acc in cash_accounts])
+    """Summarizes cash inflows and outflows categorized by Operating, Investing, and Financing activities."""
+    cash_accounts = get_cash_and_bank_balances(tenant=tenant)
+    cash_account_ids = [acc.id for acc in cash_accounts]
 
-    inflows = sum(acc.total_debit for acc in period_cash)
-    outflows = sum(acc.total_credit for acc in period_cash)
-    net_cash_change = inflows - outflows
+    je_filters = Q(tenant=tenant)
+    if start_date:
+        je_filters &= Q(date__gte=start_date)
+    if end_date:
+        je_filters &= Q(date__lte=end_date)
+
+    # 1. Find all Journal Entries that involve Cash
+    target_jes = JournalEntry.objects.filter(
+        je_filters, 
+        lines__account_id__in=cash_account_ids
+    ).distinct()
+    
+    # 2. Extract the NON-CASH lines from those entries (The "Why" the cash moved)
+    non_cash_lines = JournalEntryLine.objects.filter(
+        journal_entry__in=target_jes
+    ).exclude(account_id__in=cash_account_ids).select_related('account')
+
+    categories = {
+        'Operating': {},
+        'Investing': {},
+        'Financing': {}
+    }
+
+    # 3. Categorize the offsets
+    for nc_line in non_cash_lines:
+        acc = nc_line.account
+        
+        # Categorization Logic based on standard accounting rules
+        if acc.account_sub_type == 'Non-Current Asset':
+            cat = 'Investing'
+        elif acc.account_type == 'Equity' or acc.account_sub_type == 'Non-Current Liability':
+            cat = 'Financing'
+        else:
+            # Revenues, Expenses, Current Assets, Current Liabilities
+            cat = 'Operating'
+
+        if acc.id not in categories[cat]:
+            categories[cat][acc.id] = {
+                'account_name': acc.name,
+                'account_code': acc.code,
+                'inflow': Decimal('0.00'),
+                'outflow': Decimal('0.00'),
+            }
+        
+        # IMPORTANT: If the non-cash account is CREDITED, it means Cash was DEBITED (Inflow)
+        # If the non-cash account is DEBITED, it means Cash was CREDITED (Outflow)
+        categories[cat][acc.id]['inflow'] += nc_line.credit
+        categories[cat][acc.id]['outflow'] += nc_line.debit
+
+    # 4. Format the final output
+    result = {}
+    total_net_change = Decimal('0.00')
+
+    for cat_name, acc_dict in categories.items():
+        accounts_list = []
+        cat_net = Decimal('0.00')
+        
+        for acc_id, data in acc_dict.items():
+            net_movement = data['inflow'] - data['outflow']
+            if net_movement != Decimal('0.00'):
+                data['net'] = net_movement
+                accounts_list.append(data)
+                cat_net += net_movement
+        
+        # Sort alphabetically by account code
+        result[cat_name] = {
+            'accounts': sorted(accounts_list, key=lambda x: x['account_code']),
+            'net_cash': cat_net
+        }
+        total_net_change += cat_net
 
     return {
-        "accounts": period_cash,
+        "operating_activities": result['Operating'],
+        "investing_activities": result['Investing'],
+        "financing_activities": result['Financing'],
         "totals": {
-            "total_inflows": inflows,
-            "total_outflows": outflows,
-            "net_cash_change": net_cash_change
+            "net_cash_change": total_net_change
         }
     }
 
+
 def get_tax_report(*, tenant, start_date=None, end_date=None):
-    """Calculates tax liability based on revenue and tenant tax rate settings[cite: 1]."""
+    """Calculates Taxable Profit via reconciliation and retrieves VAT/WHT positions."""
     settings = TenantSettings.objects.get(tenant=tenant)
-    tax_rate = Decimal(settings.tax_rate) / Decimal('100.0')
+    tax_rate = Decimal(str(settings.tax_rate)) / Decimal('100.0')
     
+    # 1. Base Accounting Profit
     pl = get_profit_and_loss(tenant=tenant, start_date=start_date, end_date=end_date)
-    taxable_revenue = pl['totals']['total_revenue']
-    estimated_tax_liability = taxable_revenue * tax_rate
+    accounting_profit = pl['totals']['net_profit']
+    
+    # 2. Tax Reconciliation
+    # Future-proofed: Here you would dynamically sum expenses tagged as 'Non-Deductible'
+    non_deductible_expenses = Decimal('0.00') 
+    taxable_profit = accounting_profit + non_deductible_expenses
+    
+    # 3. Estimated Corporate Tax
+    estimated_tax_expense = (taxable_profit * tax_rate) if taxable_profit > 0 else Decimal('0.00')
+    
+    # 4. Fetch Mapped Tax Account Balances
+    try:
+        acc_settings = tenant.accounting_settings
+        tax_ids = {
+            "output_vat": acc_settings.default_output_vat_account_id,
+            "input_vat": acc_settings.default_input_vat_account_id,
+            "wht_payable": acc_settings.default_wht_payable_account_id,
+            "tax_expense": acc_settings.default_tax_expense_account_id,
+            "tax_payable": acc_settings.default_tax_payable_account_id,
+        }
+    except ObjectDoesNotExist:
+        tax_ids = {k: None for k in ["output_vat", "input_vat", "wht_payable", "tax_expense", "tax_payable"]}
+        
+    def get_account_net(account_id):
+        if not account_id: return Decimal('0.00')
+        lines_filter = Q(journalentryline__journal_entry__tenant=tenant, id=account_id)
+        if start_date: lines_filter &= Q(journalentryline__journal_entry__date__gte=start_date)
+        if end_date: lines_filter &= Q(journalentryline__journal_entry__date__lte=end_date)
+        
+        acc = Account.objects.filter(lines_filter).annotate(
+            total_debit=Coalesce(Sum('journalentryline__debit'), Decimal('0.00')),
+            total_credit=Coalesce(Sum('journalentryline__credit'), Decimal('0.00'))
+        ).first()
+        
+        if not acc: return Decimal('0.00')
+        # Assets/Expenses increase with Debit; Liabilities/Equity increase with Credit
+        if acc.account_type in ['Asset', 'Expense']:
+            return acc.total_debit - acc.total_credit
+        return acc.total_credit - acc.total_debit
 
-    # If you have an explicit Tax Payable liability account, you would query it here
-    tax_accounts = get_account_balances_by_type(
-        tenant=tenant, account_types=['Liability'], start_date=start_date, end_date=end_date
-    ).filter(name__icontains='tax')
-
-    actual_tax_collected = sum(acc.total_credit - acc.total_debit for acc in tax_accounts)
+    output_vat = get_account_net(tax_ids["output_vat"])
+    input_vat = get_account_net(tax_ids["input_vat"])
 
     return {
         "tax_rate_percentage": settings.tax_rate,
-        "taxable_revenue": taxable_revenue,
-        "estimated_tax_liability": estimated_tax_liability,
-        "actual_tax_collected_in_ledger": actual_tax_collected,
-        "tax_liability_accounts": tax_accounts
+        "reconciliation": {
+            "accounting_profit_before_tax": accounting_profit,
+            "non_deductible_expenses": non_deductible_expenses,
+            "taxable_profit": taxable_profit,
+            "estimated_tax_expense": estimated_tax_expense,
+        },
+        "balances": {
+            "output_vat": output_vat,
+            "input_vat": input_vat,
+            "net_vat_payable": output_vat - input_vat,
+            "wht_payable": get_account_net(tax_ids["wht_payable"]),
+            "tax_expense_ledger": get_account_net(tax_ids["tax_expense"]),
+            "tax_payable_ledger": get_account_net(tax_ids["tax_payable"]),
+        }
     }
 
 
@@ -230,3 +341,33 @@ def get_accounting_settings(*, tenant):
     """
     settings, created = AccountingSettings.objects.get_or_create(tenant=tenant)
     return settings
+
+def get_opening_balance(*, tenant, account_id, as_of_date):
+    """Calculates the historical opening balance of an account prior to the given date."""
+    if not as_of_date or not account_id or account_id == 'All':
+        return Decimal('0.00')
+
+    try:
+        if str(account_id).isdigit():
+            account = Account.objects.get(Q(id=account_id) | Q(code=account_id), tenant=tenant)
+        else:
+            account = Account.objects.get(code=account_id, tenant=tenant)
+    except Account.DoesNotExist:
+        return Decimal('0.00')
+
+    lines_filter = Q(
+        journal_entry__tenant=tenant,
+        account=account,
+        journal_entry__date__lt=as_of_date
+    )
+
+    totals = JournalEntryLine.objects.filter(lines_filter).aggregate(
+        tot_debit=Coalesce(Sum('debit'), Decimal('0.00')),
+        tot_credit=Coalesce(Sum('credit'), Decimal('0.00'))
+    )
+
+    # Calculate according to the account's normal balance
+    if account.account_type in ['Asset', 'Expense']:
+        return totals['tot_debit'] - totals['tot_credit']
+    else:
+        return totals['tot_credit'] - totals['tot_debit']

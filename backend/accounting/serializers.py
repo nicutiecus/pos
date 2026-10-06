@@ -7,12 +7,13 @@ from inventory.models import Supplier, SupplierLedger
 class AccountListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
-        fields = ['id', 'name', 'code', 'account_type', 'description', 'is_active', 'created_at']
+        fields = ['id', 'name', 'code', 'account_type','account_sub_type', 'description', 'is_active', 'created_at']
 
 class AccountCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
     code = serializers.CharField(max_length=50)
     account_type = serializers.ChoiceField(choices=Account.AccountType.choices)
+    account_sub_type = serializers.ChoiceField(choices=Account.AccountSubType.choices)
     description = serializers.CharField(required=False, allow_blank=True, default="")
     is_active = serializers.BooleanField(default=True)
 
@@ -20,6 +21,7 @@ class AccountUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255, required=False)
     code = serializers.CharField(max_length=50, required=False)
     account_type = serializers.ChoiceField(choices=Account.AccountType.choices, required=False)
+    account_sub_type = serializers.ChoiceField(choices=Account.AccountSubType.choices, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     is_active = serializers.BooleanField(required=False)
 
@@ -57,13 +59,14 @@ class JournalEntryCreateSerializer(serializers.Serializer):
     description = serializers.CharField()
     branch_id = serializers.UUIDField(required=False, allow_null=True)
     lines = JournalEntryLineCreateSerializer(many=True)
+    date= serializers.DateField(required=False)
 
 
 class GeneralLedgerSerializer(serializers.ModelSerializer):
     date = serializers.DateField(source='journal_entry.date', read_only=True)
     reference_id = serializers.CharField(source='journal_entry.reference_id', read_only=True)
     description = serializers.CharField(source='journal_entry.description', read_only=True)
-    branch_name = serializers.CharField(source='journal_entry.branch.name', read_only=True, default=None)
+    branch_name = serializers.CharField(source='journal_entry.branch.name', read_only=True, default=None, allow_null=True)
     account_code = serializers.CharField(source='account.code', read_only=True)
     account_name = serializers.CharField(source='account.name', read_only=True)
 
@@ -116,11 +119,13 @@ class SupplierLedgerSerializer(serializers.ModelSerializer):
         fields = ['id', 'created_at', 'transaction_type', 'amount', 'balance_after', 'reference_id', 'notes']
 
 class ReportAccountSerializer(serializers.ModelSerializer):
+    total_debit = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    total_credit = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     net_balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
-        fields = ['id', 'code', 'name', 'account_type', 'total_debit', 'total_credit', 'net_balance']
+        fields = ['id', 'code', 'name', 'account_type','account_sub_type', 'total_debit', 'total_credit', 'net_balance']
 
     def get_net_balance(self, obj):
         if obj.account_type in ['Asset', 'Expense']:

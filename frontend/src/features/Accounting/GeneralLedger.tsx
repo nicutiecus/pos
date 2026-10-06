@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import {type ColDef, type ValueFormatterParams } from 'ag-grid-community';
+import {type ColDef, type ValueFormatterParams, ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import api from '../../api/axiosInstance';
+
+
+ModuleRegistry.registerModules([ AllCommunityModule ]);
 
 interface GLEntry {
   id: number;
@@ -68,12 +71,32 @@ const GeneralLedger: React.FC = () => {
       const res = await api.get(url);
       
       let runningBalance = 0;
-      const processedData = res.data.map((row: any) => {
+      const isDebitNormal = res.data.is_debit_normal;
+      
+      // Create a visual row for the Opening Balance
+      const openingRow = {
+        id: 0 as any,
+        date: startDate,
+        reference_id: '-',
+        description: 'Opening Balance',
+        branch_name: '-',
+        account_code: '-',
+        account_name: '-',
+        debit: 0,
+        credit: 0,
+        balance: runningBalance
+      };
+      const processedData = res.data.transactions.map((row: any) => {
         const debit = Number(row.debit);
         const credit = Number(row.credit);
+        if (isDebitNormal) {
+          runningBalance += (debit - credit);
+        } else {
+          runningBalance += (credit - debit);
+        }
         // Note: In a mixed-account GL, a simple Dr - Cr running balance is shown. 
         // If filtered to a specific account, it reflects the period's net movement.
-        runningBalance += (debit - credit); 
+      
         
         return {
           ...row,
@@ -82,8 +105,11 @@ const GeneralLedger: React.FC = () => {
           balance: runningBalance
         };
       });
-
-      setRowData(processedData);
+      if (selectedAccount !== 'All') {
+      setRowData([openingRow, ...processedData]);
+      }else{
+        setRowData(processedData)
+      }
     } catch (err) {
       console.error("Failed to load General Ledger data", err);
     } finally {
@@ -142,9 +168,12 @@ const GeneralLedger: React.FC = () => {
   const gridData = useMemo(() => {
     return rowData.filter(row => {
       const matchesBranch = selectedBranch === 'All' || row.branch_name === selectedBranch;
-      const matchesSearch = 
-        row.reference_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        row.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      // Default to empty string to prevent TypeError on null values
+      const safeRef = (row.reference_id || '').toLowerCase();
+      const safeDesc = (row.description || '').toLowerCase();
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = safeRef.includes(searchLower) || safeDesc.includes(searchLower);
+    
       return matchesBranch && matchesSearch;
     });
   }, [rowData, selectedBranch, searchQuery]);
@@ -225,7 +254,8 @@ const GeneralLedger: React.FC = () => {
               rowData={gridData}
               columnDefs={columnDefs}
               animateRows={true}
-              rowSelection="single"
+              rowSelection={{mode:'singleRow'}}
+              theme= "legacy"
               pagination={true}
               paginationPageSize={50}
               defaultColDef={{ 

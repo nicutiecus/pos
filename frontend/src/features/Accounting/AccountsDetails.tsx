@@ -48,12 +48,12 @@ const AccountsDetails: React.FC = () => {
         // Fetch general ledger transactions for this account
         const ledgerRes = await api.get(`/accounting/general-ledger/?account_id=${id}`);
         
-        let runningBal = 0;
+        let runningBal = Number(ledgerRes.data.opening_balance || 0);;
         let totalDebit = 0;
         let totalCredit = 0;
         const isDebitNormal = selectedAcc.account_type === 'Asset' || selectedAcc.account_type === 'Expense';
 
-        const txWithBalances = ledgerRes.data.map((tx: any) => {
+        const txWithBalances = ledgerRes.data.transactions.map((tx: any) => {
           const debit = Number(tx.debit);
           const credit = Number(tx.credit);
           totalDebit += debit;
