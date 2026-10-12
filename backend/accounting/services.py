@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.db.models import Sum, Q
 from django.db.models.functions import Coalesce
@@ -8,6 +8,7 @@ from decimal import Decimal
 from .models import Account, JournalEntry, JournalEntryLine, AccountingPeriod, FinancialYear
 from common.models import Branch
 import logging
+from datetime import timedelta
 
 
 
@@ -22,7 +23,8 @@ def create_account_service(
     account_type: str,
     account_sub_type: str,
     description: str = "",
-    is_active: bool = True
+    is_active: bool = True,
+    is_non_deductible: bool=False,
 ) -> Account:
     """
     Creates a new General Ledger account for the tenant's Chart of Accounts.
@@ -53,7 +55,8 @@ def create_account_service(
         account_type=account_type,
         account_sub_type= account_sub_type,
         description=description.strip(),
-        is_active=is_active
+        is_active=is_active,
+        is_non_deductible=is_non_deductible
     )
     
     try:
@@ -111,7 +114,7 @@ def update_account_service(
 
 
 @transaction.atomic
-def record_journal_entry(*, tenant, branch=None, reference_id=None, description: str, lines_data: list, posting_date =None):
+def record_journal_entry(*, tenant, branch=None, reference_id=None, description: str, lines_data: list, posting_date =None, is_closing_entry: bool = False):
     """
     Records a balanced journal entry.
     lines_data expected format:
@@ -157,6 +160,7 @@ def record_journal_entry(*, tenant, branch=None, reference_id=None, description:
         description=description,
         posting_date=posting_date,
         period=period,
+        is_closing_entry=is_closing_entry
     )
 
     # Create the Lines
@@ -958,7 +962,8 @@ def perform_year_end_close_service(*, user, financial_year_id: int):
         tenant=user.tenant,
         description=f"Year-End Close for {fy.name}",
         lines_data=closing_lines,
-        posting_date=fy.end_date
+        posting_date=fy.end_date,
+        is_closing_entry=True
     )
     
     # 7. Lock the Financial Year and all related periods
@@ -968,3 +973,203 @@ def perform_year_end_close_service(*, user, financial_year_id: int):
     fy.periods.update(status=AccountingPeriod.Status.CLOSED)
     
     return closing_entry
+
+
+
+@transaction.atomic
+def create_financial_year_service(*, user, name: str, start_date, end_date):
+    """
+    Creates a new Financial Year and automatically generates its monthly Accounting Periods.
+    """
+    if FinancialYear.objects.filter(tenant=user.tenant, name__iexact=name).exists():
+        raise ValidationError(f"A financial year named '{name}' already exists.")
+    
+    if start_date >= end_date:
+        raise ValidationError("Start date must be before the end date.")
+
+    # 1. Create the Parent Year
+    fy = FinancialYear.objects.create(
+        tenant=user.tenant,
+        name=name.strip(),
+        start_date=start_date,
+        end_date=end_date,
+        is_closed=False
+    )
+
+    # 2. Auto-generate the Monthly Periods
+    current_date = start_date
+    while current_date <= end_date:
+        # Calculate the last day of the current month
+        if current_date.month == 12:
+            next_month = current_date.replace(year=current_date.year + 1, month=1, day=1)
+        else:
+            next_month = current_date.replace(month=current_date.month + 1, day=1)
+        
+        period_end = next_month - timedelta(days=1)
+        
+        # Cap the final period if the FY end date is mid-month
+        if period_end > end_date:
+            period_end = end_date
+
+        period_name = current_date.strftime("%B %Y")  # e.g., "January 2026"
+        
+        AccountingPeriod.objects.create(
+            tenant=user.tenant,
+            financial_year=fy,
+            name=period_name,
+            start_date=current_date,
+            end_date=period_end,
+            status=AccountingPeriod.Status.OPEN
+        )
+
+        current_date = next_month
+
+    return fy
+
+
+def update_accounting_period_status(*, user, period_id: int, status: str):
+    """Locks or unlocks a specific accounting period."""
+    period = AccountingPeriod.objects.select_related('financial_year').filter(
+        id=period_id, 
+        tenant=user.tenant
+    ).first()
+    
+    if not period:
+        raise ValidationError("Accounting period not found.")
+    
+    if period.financial_year.is_closed:
+        raise ValidationError("Cannot modify periods belonging to a closed financial year.")
+
+    period.status = status
+    period.save(update_fields=['status'])
+    return period
+
+def record_return_accounting(
+    *, 
+    tenant, 
+    branch, 
+    return_order, 
+    debt_forgiven_amount: Decimal, 
+    cash_refund_amount: Decimal, 
+    refund_method: str
+):
+    """
+    Translates a ReturnOrder into a balanced journal entry.
+    Debits Revenue, Credits Cash/Receivables, and reverses COGS.
+    Restocked items Debit Inventory, Defective items Debit Inventory Loss.
+    """
+    try:
+        settings = tenant.accounting_settings
+    except ObjectDoesNotExist:
+        return {"success": False, "warning": "Accounting settings are not initialized for this tenant"}
+
+    journal_lines = []
+    missing_accounts = []
+
+    total_refund = return_order.total_refund_amount
+
+    # 1. Debit Sales Revenue (Reverse Revenue)
+    if total_refund > 0:
+        if not settings.default_sales_account:
+            missing_accounts.append("Sales Revenue")
+        else:
+            journal_lines.append({
+                'account': settings.default_sales_account, 
+                'debit': total_refund, 
+                'credit': Decimal('0.00')
+            })
+
+    # 2. Credit Accounts Receivable (Reverse Customer Debt)
+    if debt_forgiven_amount > 0:
+        if not settings.default_ar_account:
+            missing_accounts.append("Accounts Receivable")
+        else:
+            journal_lines.append({
+                'account': settings.default_ar_account, 
+                'debit': Decimal('0.00'), 
+                'credit': debt_forgiven_amount
+            })
+
+    # 3. Credit Payment Account (Cash Outflow)
+    if cash_refund_amount > 0:
+        payment_account = None
+        if refund_method == 'Cash':
+            payment_account = settings.default_cash_account
+        elif refund_method == 'POS':
+            payment_account = settings.default_pos_account
+        elif refund_method == 'Transfer':
+            payment_account = settings.default_transfer_account
+
+        if not payment_account:
+            missing_accounts.append(f"{refund_method} Account")
+        else:
+            journal_lines.append({
+                'account': payment_account, 
+                'debit': Decimal('0.00'), 
+                'credit': cash_refund_amount
+            })
+
+    # 4. Handle COGS, Inventory Assets, and Inventory Loss
+    total_cogs_reversal = Decimal('0.00')
+    total_restock_value = Decimal('0.00')
+    total_loss_value = Decimal('0.00')
+
+    # Calculate exact COGS reversal per item
+    for return_item in return_order.items.all():
+        item_cogs = return_item.quantity_returned * return_item.original_item.cost_price_at_sale
+        total_cogs_reversal += item_cogs
+
+        if return_item.condition == 'Restockable':
+            total_restock_value += item_cogs
+        elif return_item.condition == 'Defective':
+            total_loss_value += item_cogs
+
+    # Credit COGS (Reverse the Cost of Sale)
+    if total_cogs_reversal > 0:
+        if not settings.default_cogs_account:
+            missing_accounts.append("Cost of Goods Sold")
+        else:
+            journal_lines.append({
+                'account': settings.default_cogs_account, 
+                'debit': Decimal('0.00'), 
+                'credit': total_cogs_reversal
+            })
+
+    # Debit Inventory Asset (Restore Restocked Goods)
+    if total_restock_value > 0:
+        if not settings.default_inventory_account:
+            missing_accounts.append("Inventory Asset")
+        else:
+            journal_lines.append({
+                'account': settings.default_inventory_account, 
+                'debit': total_restock_value, 
+                'credit': Decimal('0.00')
+            })
+
+    # Debit Inventory Loss (Write off Defective Goods)
+    if total_loss_value > 0:
+        if not settings.default_inventory_loss_account:
+            missing_accounts.append("Inventory Loss Account")
+        else:
+            journal_lines.append({
+                'account': settings.default_inventory_loss_account, 
+                'debit': total_loss_value, 
+                'credit': Decimal('0.00')
+            })
+
+    # Stop if critical mappings are missing
+    if missing_accounts:
+        warning_msg = f"Return recorded physically, but journal entry skipped. Missing account mappings: {', '.join(set(missing_accounts))}."
+        logger.warning(f"Tenant {tenant.id} missing accounting configs: {missing_accounts}")
+        return {"success": False, "warning": warning_msg}
+
+    # Execute the balanced transaction
+    record_journal_entry(
+        tenant=tenant,
+        branch=branch,
+        reference_id=f"RET-{return_order.id}",
+        description=f"Sales Return for Order #{return_order.original_order.id}",
+        lines_data=journal_lines
+    )
+
+    return {"success": True}

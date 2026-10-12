@@ -134,40 +134,97 @@ const FinancialReports: React.FC = () => {
               </div>
             )}
 
-            {/* PROFIT & LOSS */}
+           {/* PROFIT & LOSS */}
             {activeTab === 'pl' && plData && (
               <div className="space-y-6 max-w-4xl mx-auto">
+                
+                {/* Sales Revenue */}
                 <div>
-                  <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-3">Revenues</h3>
-                  {plData.revenues.map((acc: any) => (
-                    <div key={acc.id} className="flex justify-between text-sm py-1"><span className="text-gray-600">{acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                  <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-3">Sales Revenue</h3>
+                  {plData.sales_revenue.map((acc: any) => (
+                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
                   ))}
-                  <div className="flex justify-between font-bold text-sm pt-2 mt-2 border-t"><span className="text-gray-800">Total Revenue</span><span className="text-blue-600">₦{Number(plData.totals.total_revenue).toLocaleString()}</span></div>
+                  <div className="flex justify-between font-bold text-sm pt-2 mt-2"><span className="text-gray-800">Total Sales Revenue</span><span className="text-blue-600">₦{Number(plData.totals.total_sales_revenue).toLocaleString()}</span></div>
                 </div>
 
+                {/* COGS */}
                 <div>
-                  <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-3">Cost of Goods Sold (COGS)</h3>
+                  <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-3">Cost of Sales</h3>
                   {plData.cogs.map((acc: any) => (
-                    <div key={acc.id} className="flex justify-between text-sm py-1"><span className="text-gray-600">{acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
                   ))}
-                  <div className="flex justify-between font-bold text-sm pt-2 mt-2 border-t"><span className="text-gray-800">Gross Profit</span><span className="text-green-600">₦{Number(plData.totals.gross_profit).toLocaleString()}</span></div>
+                  <div className="flex justify-between font-black text-sm pt-3 mt-2 border-t border-gray-200 bg-gray-50 p-3 rounded">
+                    <span className="text-gray-800">Gross Profit</span>
+                    <span className="text-green-600">₦{Number(plData.totals.gross_profit).toLocaleString()}</span>
+                  </div>
                 </div>
 
+                {/* Other Operating Revenue */}
+                {plData.other_operating_revenue?.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-3">Other Operating Revenue</h3>
+                    {plData.other_operating_revenue.map((acc: any) => (
+                      <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name}</span><span className="font-medium text-blue-600">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Operating Expenses */}
                 <div>
                   <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-3">Operating Expenses</h3>
                   {plData.operating_expenses.map((acc: any) => (
-                    <div key={acc.id} className="flex justify-between text-sm py-1"><span className="text-gray-600">{acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
                   ))}
-                  <div className="flex justify-between font-bold text-sm pt-2 mt-2 border-t"><span className="text-gray-800">Total Operating Expenses</span><span className="text-red-600">₦{Number(plData.totals.total_operating_expenses).toLocaleString()}</span></div>
+                  <div className="flex justify-between font-bold text-sm pt-2 mt-2"><span className="text-gray-800">Total Operating Expenses</span><span className="text-red-600">₦{Number(plData.totals.total_operating_expenses).toLocaleString()}</span></div>
                 </div>
 
-                <div className="flex justify-between font-black text-lg pt-4 border-t-2 border-gray-800">
+                {/* Operating Profit */}
+                <div className="flex justify-between font-black text-sm pt-3 mt-2 border-t border-gray-200 bg-gray-50 p-3 rounded">
+                  <span className="text-gray-800">Operating Profit (EBIT)</span>
+                  <span className={Number(plData.totals.operating_profit) >= 0 ? 'text-green-600' : 'text-red-600'}>₦{Number(plData.totals.operating_profit).toLocaleString()}</span>
+                </div>
+
+                {/* Non-Operating Activity */}
+                {(plData.other_income?.length > 0 || plData.finance_costs?.length > 0 || plData.other_expenses?.length > 0) && (
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-3">Non-Operating Income & Expenses</h3>
+                    {plData.other_income?.map((acc: any) => (
+                      <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name} (Income)</span><span className="font-medium text-green-600">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    ))}
+                    {plData.other_expenses?.map((acc: any) => (
+                      <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name} (Other Expense)</span><span className="font-medium text-red-600">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    ))}
+                    {plData.finance_costs?.map((acc: any) => (
+                      <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name} (Finance Cost)</span><span className="font-medium text-red-600">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Profit Before Tax */}
+                <div className="flex justify-between font-black text-sm pt-3 mt-2 border-t border-gray-200 bg-gray-50 p-3 rounded">
+                  <span className="text-gray-800">Profit Before Tax (EBT)</span>
+                  <span className={Number(plData.totals.profit_before_tax) >= 0 ? 'text-green-600' : 'text-red-600'}>₦{Number(plData.totals.profit_before_tax).toLocaleString()}</span>
+                </div>
+
+                {/* Tax Expense */}
+                {plData.tax_expenses?.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-3">Income Tax Expense</h3>
+                    {plData.tax_expenses.map((acc: any) => (
+                      <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name}</span><span className="font-medium text-red-600">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Final Net Profit */}
+                <div className="flex justify-between items-center font-black text-xl pt-6 mt-4 border-t-4 border-gray-900 bg-gray-50 p-4 rounded-b-lg">
                   <span>Net Profit / Income</span>
-                  <span className={Number(plData.totals.net_profit) >= 0 ? 'text-green-600' : 'text-red-600'}>₦{Number(plData.totals.net_profit).toLocaleString()}</span>
+                  <span className={Number(plData.totals.net_profit) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {Number(plData.totals.net_profit) >= 0 ? `₦${Number(plData.totals.net_profit).toLocaleString()}` : `(₦${Math.abs(Number(plData.totals.net_profit)).toLocaleString()})`}
+                  </span>
                 </div>
               </div>
             )}
-
             {/* BALANCE SHEET */}
             {activeTab === 'bs' && bsData && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -175,7 +232,7 @@ const FinancialReports: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-black text-blue-900 border-b-2 border-blue-900 pb-2 mb-3">Assets</h3>
                   {bsData.assets.map((acc: any) => (
-                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
                   ))}
                   <div className="flex justify-between font-bold text-sm pt-3 mt-2"><span className="text-gray-800">Total Assets</span><span className="text-blue-700 text-lg">₦{Number(bsData.totals.total_assets).toLocaleString()}</span></div>
                 </div>
@@ -184,15 +241,20 @@ const FinancialReports: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-black text-red-900 border-b-2 border-red-900 pb-2 mb-3">Liabilities</h3>
                   {bsData.liabilities.map((acc: any) => (
-                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
                   ))}
                   <div className="flex justify-between font-bold text-sm pt-3 mt-2 mb-6"><span className="text-gray-800">Total Liabilities</span><span className="text-red-700">₦{Number(bsData.totals.total_liabilities).toLocaleString()}</span></div>
 
                   <h3 className="text-lg font-black text-green-900 border-b-2 border-green-900 pb-2 mb-3">Equity</h3>
                   {bsData.equity.map((acc: any) => (
-                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
+                    <div key={acc.id} className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600">{acc.code} - {acc.name}</span><span className="font-medium">₦{Number(acc.net_balance).toLocaleString()}</span></div>
                   ))}
-                  <div className="flex justify-between text-sm py-1 border-b border-gray-50"><span className="text-gray-600 font-bold">Retained Earnings (Current Period)</span><span className="font-bold text-green-700">₦{Number(bsData.totals.retained_earnings).toLocaleString()}</span></div>
+                  
+                  {/* Now properly labeled as Current Year Earnings */}
+                  <div className="flex justify-between text-sm py-1 border-b border-gray-50">
+                    <span className="text-gray-600 font-bold">Current Year Earnings</span>
+                    <span className="font-bold text-green-700">₦{Number(bsData.totals.current_year_earnings).toLocaleString()}</span>
+                  </div>
                   
                   <div className="flex justify-between font-bold text-sm pt-3 mt-2"><span className="text-gray-800">Total Liabilities & Equity</span><span className="text-gray-900 text-lg">₦{Number(bsData.totals.total_liabilities_and_equity).toLocaleString()}</span></div>
                 </div>

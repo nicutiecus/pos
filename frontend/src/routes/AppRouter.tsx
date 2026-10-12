@@ -60,6 +60,7 @@ import AccountsPayable from '../features/Accounting/AccountsPayable';
 import CashBankAccounts from '../features/Accounting/CashBankAccounts';
 import AccountingSettings from '../features/Accounting/AccountingSettings';
 import FinancialReports from '../features/Accounting/Financialreports';
+import FinancialYearsManagement from '../features/Accounting/FinancialYearsManagement';
 //Settings
 import AdminSettings from '../features/admin-dash/AdminSettings';
 //Sales Payments
@@ -128,6 +129,7 @@ const AppRouter: React.FC = () => {
              <Route path = "accounting/cash-bank" element={<CashBankAccounts/>}/>
              <Route path = "accounting/settings" element={<AccountingSettings/>}/>
              <Route path = "accounting/reports" element={<FinancialReports/>}/>
+             <Route path ="accounting/period"   element={<FinancialYearsManagement/>}/>
 
 
 

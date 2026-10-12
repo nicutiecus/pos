@@ -1,48 +1,62 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../api/axiosInstance'; //[cite: 1]
-import { useAuth } from '../../context/AuthContext'; //[cite: 1]
+import api from '../../api/axiosInstance';
+import { useAuth } from '../../context/AuthContext';
 
 interface Account {
   id: number;
   name: string;
   code: string;
-  account_type: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense'; //[cite: 1]
+  account_type: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
+  account_sub_type: string | null;
   description: string;
   is_active: boolean;
+  is_non_deductible: boolean;
 }
+
+// Map the strict sub-types corresponding to our backend Django choices
+const SUB_TYPE_CHOICES: Record<string, string[]> = {
+  Asset: ['Current Asset', 'Non-Current Asset'],
+  Liability: ['Current Liability', 'Non-Current Liability'],
+  Equity: ['Equity'],
+  Revenue: ['Sales Revenue', 'Other Operating Revenue', 'Other Income'],
+  Expense: ['Cost of Goods Sold', 'Operating Expense', 'Finance Cost', 'Tax Expense', 'Other Expense']
+};
 
 const ChartOfAccounts: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isLoading: isAuthLoading } = useAuth(); //[cite: 1]
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Filters
-  const [searchQuery, setSearchQuery] = useState(''); //[cite: 1]
-  const [typeFilter, setTypeFilter] = useState('All'); //[cite: 1]
-  const [statusFilter, setStatusFilter] = useState('All'); //[cite: 1]
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | false>(false);
+  
   const [formData, setFormData] = useState({
     name: '',
     code: '',
     account_type: 'Asset',
+    account_sub_type: 'Current Asset', // Default matching Asset
     description: '',
-    is_active: true
+    is_active: true,
+    is_non_deductible: false
   });
 
   useEffect(() => {
-    fetchAccounts(); //[cite: 1]
+    fetchAccounts();
   }, []);
 
   const fetchAccounts = async () => {
     try {
-      const res = await api.get('/accounting/accounts/'); //[cite: 1]
+      const res = await api.get('/accounting/accounts/');
       setAccounts(res.data);
     } catch (err) {
       console.error("Failed to load accounts", err);
@@ -58,38 +72,51 @@ const ChartOfAccounts: React.FC = () => {
     try {
       await api.post('/accounting/accounts/', formData);
       setIsModalOpen(false);
-      setFormData({ name: '', code: '', account_type: 'Asset', description: '', is_active: true });
+      setFormData({ 
+        name: '', code: '', account_type: 'Asset', account_sub_type: 'Current Asset', 
+        description: '', is_active: true, is_non_deductible: false 
+      });
       fetchAccounts(); 
     } catch (err: any) {
       console.error("Failed to create account", err);
       const apiError = err.response?.data?.error || err.response?.data?.message || "Failed to create account. The code might already exist.";
       setErrorMessage(apiError);
-      // Optional: Add toast/error notification here
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Handle dynamic dropdown changes
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newType = e.target.value;
+    setFormData({
+      ...formData,
+      account_type: newType,
+      account_sub_type: SUB_TYPE_CHOICES[newType][0], // Auto-select the first valid sub-type
+      is_non_deductible: newType === 'Expense' ? formData.is_non_deductible : false // Reset tax flag if not an expense
+    });
+  };
+
   const filteredAccounts = useMemo(() => {
     return accounts.filter(acc => {
-      const matchesSearch = acc.name.toLowerCase().includes(searchQuery.toLowerCase()) || acc.code.includes(searchQuery); //[cite: 1]
-      const matchesType = typeFilter === 'All' || acc.account_type === typeFilter; //[cite: 1]
-      const matchesStatus = statusFilter === 'All' || (statusFilter === 'Active' ? acc.is_active : !acc.is_active); //[cite: 1]
+      const matchesSearch = acc.name.toLowerCase().includes(searchQuery.toLowerCase()) || acc.code.includes(searchQuery);
+      const matchesType = typeFilter === 'All' || acc.account_type === typeFilter;
+      const matchesStatus = statusFilter === 'All' || (statusFilter === 'Active' ? acc.is_active : !acc.is_active);
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [accounts, searchQuery, typeFilter, statusFilter]);
 
   const groupedAccounts = useMemo(() => {
-    const groups: Record<string, Account[]> = { Asset: [], Liability: [], Equity: [], Revenue: [], Expense: [] }; //[cite: 1]
-    filteredAccounts.forEach(acc => groups[acc.account_type].push(acc)); //[cite: 1]
+    const groups: Record<string, Account[]> = { Asset: [], Liability: [], Equity: [], Revenue: [], Expense: [] };
+    filteredAccounts.forEach(acc => groups[acc.account_type].push(acc));
     return groups;
   }, [filteredAccounts]);
 
-  if (isAuthLoading) return <div className="p-10 text-center text-gray-500">Verifying session...</div>; //[cite: 1]
-  if (isLoading) return <div className="p-10 text-center text-gray-500">Loading Chart of Accounts...</div>; //[cite: 1]
+  if (isAuthLoading) return <div className="p-10 text-center text-gray-500">Verifying session...</div>;
+  if (isLoading) return <div className="p-10 text-center text-gray-500">Loading Chart of Accounts...</div>;
 
-  const adminRoles = ['Admin', 'Super_Admin', 'Tenant_Admin']; //[cite: 1]
-  const routePrefix = user?.role && adminRoles.includes(user.role) ? '/admin' : '/manager'; //[cite: 1]
+  const adminRoles = ['Admin', 'Super_Admin', 'Tenant_Admin'];
+  const routePrefix = user?.role && adminRoles.includes(user.role) ? '/admin' : '/manager';
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -140,8 +167,8 @@ const ChartOfAccounts: React.FC = () => {
       {/* Account Groups */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-8">
         {(['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'] as const).map(type => {
-          const accs = groupedAccounts[type]; //[cite: 1]
-          if (accs.length === 0) return null; //[cite: 1]
+          const accs = groupedAccounts[type];
+          if (accs.length === 0) return null;
 
           return (
             <div key={type}>
@@ -156,7 +183,9 @@ const ChartOfAccounts: React.FC = () => {
                   >
                     <span className="w-20 font-mono font-bold text-gray-500 group-hover:text-blue-600 transition-colors">{acc.code}</span>
                     <span className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{acc.name}</span>
-                    {!acc.is_active && <span className="ml-3 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold">Inactive</span>}
+                    <span className="ml-auto text-xs text-gray-400 font-medium px-2">{acc.account_sub_type}</span>
+                    {acc.is_non_deductible && <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold uppercase">Non-Deductible</span>}
+                    {!acc.is_active && <span className="ml-3 text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold uppercase">Inactive</span>}
                   </li>
                 ))}
               </ul>
@@ -171,7 +200,6 @@ const ChartOfAccounts: React.FC = () => {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
             <h3 className="text-xl font-bold text-gray-800 mb-4">Create New Account</h3>
             <form onSubmit={handleCreateAccount} className="space-y-4">
-              {/* Error Message Display */}
               {errorMessage && (
                 <div className="p-3 bg-red-50 text-red-600 text-sm font-bold rounded-lg border border-red-200">
                   {errorMessage}
@@ -187,28 +215,29 @@ const ChartOfAccounts: React.FC = () => {
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                   className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500" 
-                  placeholder="e.g. Cash in Bank"
+                  placeholder="e.g. Fines and Penalties"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Code *</label>
+                <input 
+                  type="text" 
+                  maxLength={50}
+                  required
+                  value={formData.code}
+                  onChange={(e) => setFormData({...formData, code: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500" 
+                  placeholder="e.g. 5010"
                 />
               </div>
 
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Code *</label>
-                  <input 
-                    type="text" 
-                    maxLength={50}
-                    required
-                    value={formData.code}
-                    onChange={(e) => setFormData({...formData, code: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500" 
-                    placeholder="e.g. 1010"
-                  />
-                </div>
-                <div className="flex-1">
                   <label className="block text-sm font-bold text-gray-700 mb-1">Type *</label>
                   <select 
                     value={formData.account_type}
-                    onChange={(e) => setFormData({...formData, account_type: e.target.value})}
+                    onChange={handleTypeChange}
                     className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500 bg-white"
                   >
                     <option value="Asset">Asset</option>
@@ -216,6 +245,18 @@ const ChartOfAccounts: React.FC = () => {
                     <option value="Equity">Equity</option>
                     <option value="Revenue">Revenue</option>
                     <option value="Expense">Expense</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Sub-Type *</label>
+                  <select 
+                    value={formData.account_sub_type}
+                    onChange={(e) => setFormData({...formData, account_sub_type: e.target.value})}
+                    className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500 bg-white"
+                  >
+                    {SUB_TYPE_CHOICES[formData.account_type].map(subType => (
+                      <option key={subType} value={subType}>{subType}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -227,11 +268,28 @@ const ChartOfAccounts: React.FC = () => {
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
                   className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
                   placeholder="Optional details..."
-                  rows={3}
+                  rows={2}
                 />
               </div>
 
-              <div className="flex items-center">
+              {/* Tax Non-Deductible Flag (Only relevant for Expenses) */}
+              {formData.account_type === 'Expense' && (
+                <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 flex items-start">
+                  <input 
+                    type="checkbox" 
+                    id="is_non_deductible"
+                    checked={formData.is_non_deductible}
+                    onChange={(e) => setFormData({...formData, is_non_deductible: e.target.checked})}
+                    className="mt-0.5 h-4 w-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                  />
+                  <label htmlFor="is_non_deductible" className="ml-2 text-sm text-purple-900 font-medium">
+                    <span className="font-bold block">Non-Deductible Expense</span>
+                    Check this if the expense cannot be deducted for corporate tax purposes (e.g., penalties, certain entertainment).
+                  </label>
+                </div>
+              )}
+
+              <div className="flex items-center pt-2">
                 <input 
                   type="checkbox" 
                   id="is_active"

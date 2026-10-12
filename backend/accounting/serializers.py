@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Account, AccountingSettings, JournalEntry, JournalEntryLine
+from .models import Account, AccountingSettings, JournalEntry, JournalEntryLine, FinancialYear, AccountingPeriod
 from sales.models import Customer, CustomerLedger
 from inventory.models import Supplier, SupplierLedger
 
@@ -7,7 +7,7 @@ from inventory.models import Supplier, SupplierLedger
 class AccountListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
-        fields = ['id', 'name', 'code', 'account_type','account_sub_type', 'description', 'is_active', 'created_at']
+        fields = ['id', 'name', 'code', 'account_type','account_sub_type', 'description', 'is_active', 'created_at','is_non_deductible']
 
 class AccountCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
@@ -15,6 +15,7 @@ class AccountCreateSerializer(serializers.Serializer):
     account_type = serializers.ChoiceField(choices=Account.AccountType.choices)
     account_sub_type = serializers.ChoiceField(choices=Account.AccountSubType.choices)
     description = serializers.CharField(required=False, allow_blank=True, default="")
+    is_non_deductible=serializers.BooleanField(default=False)
     is_active = serializers.BooleanField(default=True)
 
 class AccountUpdateSerializer(serializers.Serializer):
@@ -23,6 +24,7 @@ class AccountUpdateSerializer(serializers.Serializer):
     account_type = serializers.ChoiceField(choices=Account.AccountType.choices, required=False)
     account_sub_type = serializers.ChoiceField(choices=Account.AccountSubType.choices, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
+    is_non_deductible=serializers.BooleanField(default=False)
     is_active = serializers.BooleanField(required=False)
 
 
@@ -153,3 +155,26 @@ class AccountingSettingsSerializer(serializers.ModelSerializer):
                     field.queryset = Account.objects.filter(tenant=tenant, is_active=True)
                     
         return fields
+
+
+
+class AccountingPeriodSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountingPeriod
+        fields = ['id', 'name', 'start_date', 'end_date', 'status']
+
+class FinancialYearSerializer(serializers.ModelSerializer):
+    # Nest the periods so the frontend gets the full calendar in one request
+    periods = AccountingPeriodSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = FinancialYear
+        fields = ['id', 'name', 'start_date', 'end_date', 'is_closed', 'periods']
+
+class FinancialYearCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=50)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+
+class AccountingPeriodUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=AccountingPeriod.Status.choices)

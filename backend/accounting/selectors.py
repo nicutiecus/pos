@@ -2,7 +2,7 @@ from django.db.models import Sum, Q
 from django.db.models.functions import Coalesce
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
-from .models import Account, JournalEntryLine, AccountingSettings, JournalEntry
+from .models import Account, JournalEntryLine, AccountingSettings, JournalEntry, FinancialYear
 from sales.models import Customer, CustomerLedger
 from inventory.models import Supplier, SupplierLedger
 from common.models import TenantSettings
@@ -78,13 +78,16 @@ def get_supplier_ledger(*, tenant, supplier_id: str):
     ).order_by('-created_at')
 
 
-def get_account_balances_by_type(*, tenant, account_types: list, start_date=None, end_date=None):
+def get_account_balances_by_type(*, tenant, account_types: list, start_date=None, end_date=None, exclude_closing_entries=False):
     """Base aggregator for accounts by type."""
     line_filters = Q()
     if start_date:
         line_filters &= Q(journalentryline__journal_entry__date__gte=start_date)
     if end_date:
         line_filters &= Q(journalentryline__journal_entry__date__lte=end_date)
+
+    if exclude_closing_entries:
+        line_filters &= Q(journalentryline__journal_entry__is_closing_entry=False)
         
     return Account.objects.filter(
         tenant=tenant, 
@@ -120,36 +123,89 @@ def get_cash_and_bank_balances(*, tenant, as_of_date=None):
         total_credit=Coalesce(Sum('journalentryline__credit', filter=line_filters), Decimal('0.00'))
     )
 
-def get_profit_and_loss(*, tenant, start_date=None, end_date=None):
-    """Calculates Revenue, COGS, and Operating Expenses."""
+def get_profit_and_loss(*, tenant, start_date=None, end_date=None, include_closing_entries=False):
+    """Calculates a multi-step Income Statement based on strict account subtypes."""
+    exclude_closing= not include_closing_entries
     revenues = get_account_balances_by_type(
-        tenant=tenant, account_types=['Revenue'], start_date=start_date, end_date=end_date
+        tenant=tenant, account_types=['Revenue'], start_date=start_date, end_date=end_date, 
+        exclude_closing_entries=exclude_closing
     )
     expenses = get_account_balances_by_type(
-        tenant=tenant, account_types=['Expense'], start_date=start_date, end_date=end_date
+        tenant=tenant, account_types=['Expense'], start_date=start_date, end_date=end_date,
+        exclude_closing_entries=exclude_closing
+            
     )
 
-    total_revenue = sum(acc.total_credit - acc.total_debit for acc in revenues)
-    
-    # Separate COGS from standard expenses if possible by name/code heuristic
-    cogs_accounts = [acc for acc in expenses if acc.account_sub_type == 'Cost of Goods Sold']
-    op_expenses = [acc for acc in expenses if acc not in cogs_accounts]
+    # 1. Categorize Revenues
+    sales_revenue, other_operating_revenue, other_income = [], [], []
+    for acc in revenues:
+        if acc.account_sub_type == 'Other Operating Revenue':
+            other_operating_revenue.append(acc)
+        elif acc.account_sub_type == 'Other Income':
+            other_income.append(acc)
+        else:
+            # Default unclassified revenue to Sales Revenue
+            sales_revenue.append(acc)
 
-    total_cogs = sum(acc.total_debit - acc.total_credit for acc in cogs_accounts)
-    total_op_expenses = sum(acc.total_debit - acc.total_credit for acc in op_expenses)
-    
-    gross_profit = total_revenue - total_cogs
-    net_profit = gross_profit - total_op_expenses
+    # 2. Categorize Expenses
+    cogs, operating_expenses, finance_costs, tax_expenses, other_expenses = [], [], [], [], []
+    for acc in expenses:
+        if acc.account_sub_type == 'Cost of Goods Sold':
+            cogs.append(acc)
+        elif acc.account_sub_type == 'Finance Cost':
+            finance_costs.append(acc)
+        elif acc.account_sub_type == 'Tax Expense':
+            tax_expenses.append(acc)
+        elif acc.account_sub_type == 'Other Expense':
+            other_expenses.append(acc)
+        else:
+            # Default unclassified expenses to Operating Expenses
+            operating_expenses.append(acc)
+
+    # Helper to calculate net balances
+    def sum_net(acc_list, is_revenue=True):
+        if is_revenue:
+            return sum(acc.total_credit - acc.total_debit for acc in acc_list)
+        return sum(acc.total_debit - acc.total_credit for acc in acc_list)
+
+    # 3. Calculate Totals
+    t_sales_revenue = sum_net(sales_revenue, True)
+    t_other_op_revenue = sum_net(other_operating_revenue, True)
+    t_other_income = sum_net(other_income, True)
+
+    t_cogs = sum_net(cogs, False)
+    t_op_expenses = sum_net(operating_expenses, False)
+    t_finance_costs = sum_net(finance_costs, False)
+    t_tax_expenses = sum_net(tax_expenses, False)
+    t_other_expenses = sum_net(other_expenses, False)
+
+    # 4. Multi-Step Margins
+    gross_profit = t_sales_revenue - t_cogs
+    operating_profit = gross_profit + t_other_op_revenue - t_op_expenses
+    profit_before_tax = operating_profit + t_other_income - t_other_expenses - t_finance_costs
+    net_profit = profit_before_tax - t_tax_expenses
 
     return {
-        "revenues": revenues,
-        "cogs": cogs_accounts,
-        "operating_expenses": op_expenses,
+        "sales_revenue": sales_revenue,
+        "other_operating_revenue": other_operating_revenue,
+        "other_income": other_income,
+        "cogs": cogs,
+        "operating_expenses": operating_expenses,
+        "finance_costs": finance_costs,
+        "tax_expenses": tax_expenses,
+        "other_expenses": other_expenses,
         "totals": {
-            "total_revenue": total_revenue,
-            "total_cogs": total_cogs,
+            "total_sales_revenue": t_sales_revenue,
+            "total_other_op_revenue": t_other_op_revenue,
+            "total_other_income": t_other_income,
+            "total_cogs": t_cogs,
             "gross_profit": gross_profit,
-            "total_operating_expenses": total_op_expenses,
+            "total_operating_expenses": t_op_expenses,
+            "operating_profit": operating_profit,
+            "total_finance_costs": t_finance_costs,
+            "total_tax_expenses": t_tax_expenses,
+            "total_other_expenses": t_other_expenses,
+            "profit_before_tax": profit_before_tax,
             "net_profit": net_profit
         }
     }
@@ -165,8 +221,8 @@ def get_balance_sheet(*, tenant, as_of_date=None):
     total_equity = sum(acc.total_credit - acc.total_debit for acc in equity)
 
     # Add current period Net Income to Equity to balance the sheet
-    pl = get_profit_and_loss(tenant=tenant, end_date=as_of_date)
-    retained_earnings = pl['totals']['net_profit']
+    pl = get_profit_and_loss(tenant=tenant, end_date=as_of_date,include_closing_entries=True)
+    current_year_earnings = pl['totals']['net_profit']
 
     return {
         "assets": assets,
@@ -176,8 +232,8 @@ def get_balance_sheet(*, tenant, as_of_date=None):
             "total_assets": total_assets,
             "total_liabilities": total_liabilities,
             "total_equity_base": total_equity,
-            "retained_earnings": retained_earnings,
-            "total_liabilities_and_equity": total_liabilities + total_equity + retained_earnings
+            "current_year_earnings": current_year_earnings,
+            "total_liabilities_and_equity": total_liabilities + total_equity + current_year_earnings
         }
     }
 def get_cash_flow(*, tenant, start_date=None, end_date=None):
@@ -274,10 +330,24 @@ def get_tax_report(*, tenant, start_date=None, end_date=None):
     # 1. Base Accounting Profit
     pl = get_profit_and_loss(tenant=tenant, start_date=start_date, end_date=end_date)
     accounting_profit = pl['totals']['net_profit']
-    
+
+    #dynamically sum expenses tagged as 'Non-Deductible'
+    nd_lines_filter = Q(
+        journalentryline__journal_entry__tenant=tenant,
+        account_type='Expense',
+        is_non_deductible=True
+    )
+    if start_date:
+        nd_lines_filter &= Q(journalentryline__journal_entry__date__gte=start_date)
+    if end_date:
+        nd_lines_filter &= Q(journalentryline__journal_entry__date__lte=end_date)
+    nd_totals = Account.objects.filter(nd_lines_filter).aggregate(
+        tot_debit=Coalesce(Sum('journalentryline__debit'), Decimal('0.00')),
+        tot_credit=Coalesce(Sum('journalentryline__credit'), Decimal('0.00'))
+    )
     # 2. Tax Reconciliation
-    # Future-proofed: Here you would dynamically sum expenses tagged as 'Non-Deductible'
-    non_deductible_expenses = Decimal('0.00') 
+    # Future-proofed: Here you would 
+    non_deductible_expenses = nd_totals['tot_debit']-nd_totals['tot_credit']
     taxable_profit = accounting_profit + non_deductible_expenses
     
     # 3. Estimated Corporate Tax
@@ -371,3 +441,10 @@ def get_opening_balance(*, tenant, account_id, as_of_date):
         return totals['tot_debit'] - totals['tot_credit']
     else:
         return totals['tot_credit'] - totals['tot_debit']
+
+
+def get_financial_years(*, tenant):
+    """Retrieves all financial years and their nested periods, ordered by newest first."""
+    return FinancialYear.objects.filter(
+        tenant=tenant
+    ).prefetch_related('periods').order_by('-start_date')

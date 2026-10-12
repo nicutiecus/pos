@@ -41,6 +41,10 @@ class Account(TenantAwareModel):
     account_sub_type = models.CharField(max_length=50, choices=AccountSubType.choices, default= AccountSubType.OTHER_EXPENSE) 
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    is_non_deductible = models.BooleanField(
+        default=False, 
+        help_text="Check if this expense cannot be deducted for corporate tax purposes."
+    )
 
     class Meta:
         db_table = 'accounting_accounts'
@@ -100,6 +104,7 @@ class JournalEntry(TenantAwareModel):
     reference_id = models.CharField(max_length=100, blank=True, null=True, help_text="e.g., Receipt ID or PO ID")
     description = models.TextField()
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
+    is_closing_entry = models.BooleanField(default=False, db_index=True)
     
     class Meta:
         db_table = 'accounting_journal_entries'

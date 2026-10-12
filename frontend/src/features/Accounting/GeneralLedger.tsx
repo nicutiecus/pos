@@ -70,7 +70,7 @@ const GeneralLedger: React.FC = () => {
 
       const res = await api.get(url);
       
-      let runningBalance = 0;
+      let runningBalance = Number(res.data.opening_balance || 0);
       const isDebitNormal = res.data.is_debit_normal;
       
       // Create a visual row for the Opening Balance

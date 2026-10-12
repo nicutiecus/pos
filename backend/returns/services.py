@@ -5,6 +5,7 @@ from .models import ReturnOrder, ReturnItem
 from sales.models import SaleItem, Payment, CustomerLedger, Customer
 from inventory.models import InventoryBatch
 from decimal import Decimal
+from accounting.services import record_return_accounting
 
 @transaction.atomic
 def process_customer_return(*, tenant, branch_id, original_order,
@@ -88,6 +89,8 @@ def process_customer_return(*, tenant, branch_id, original_order,
     total_refund_amount=return_order.total_refund_amount
     refund_remaining = total_refund_amount
 
+    total_debt_forgiven = Decimal('0.00')
+
     # 1. If there is a refund to process, and the original order belonged to a tracked customer
     if refund_remaining > 0 and original_order.customer:
         
@@ -125,7 +128,7 @@ def process_customer_return(*, tenant, branch_id, original_order,
                     notes=f"Debt reversal for returned items (Orig. Order #{original_order.id})",
                     processed_by=cashier
                 )
-                
+                total_debt_forgiven = debt_to_forgive
                 # Deduct the forgiven debt from the remaining refund pool
                 refund_remaining -= debt_to_forgive
 
@@ -143,9 +146,16 @@ def process_customer_return(*, tenant, branch_id, original_order,
             reference_code=f"RET-{return_order.id}",
             transaction_type = 'Refund'
         )
-    """order=original_order
-    order.status='Returned'
-    order.save()"""
+
+    record_return_accounting(
+        tenant=tenant,
+        branch=return_order.branch,
+        return_order=return_order,
+        debt_forgiven_amount=total_debt_forgiven,
+        cash_refund_amount=refund_remaining, # The portion refunded as cash/transfer
+        refund_method=refund_method
+    )
+   
   
     return return_order
 

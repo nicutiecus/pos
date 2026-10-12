@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/axiosInstance';
+
 interface Account {
   id: number;
   name: string;
@@ -11,7 +12,7 @@ interface Account {
 }
 
 interface Transaction {
-  id: number;
+  id: number | string;
   date: string;
   reference_id: string;
   description: string;
@@ -29,11 +30,19 @@ const AccountsDetails: React.FC = () => {
   const [accountTotals, setAccountTotals] = useState({ debit: 0, credit: 0, balance: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
+  // Date Filters (Default to current month)
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+
+  const [startDate, setStartDate] = useState(firstDay);
+  const [endDate, setEndDate] = useState(lastDay);
+
   useEffect(() => {
     const fetchAccountData = async () => {
       setIsLoading(true);
       try {
-        // Fetch account details (filtering from list since we didn't explicitly build a GET detail endpoint)
+        // Fetch account details
         const accountRes = await api.get('/accounting/accounts/');
         const selectedAcc = accountRes.data.find((acc: Account) => acc.id === Number(id));
         
@@ -45,13 +54,24 @@ const AccountsDetails: React.FC = () => {
         
         setAccount(selectedAcc);
 
-        // Fetch general ledger transactions for this account
-        const ledgerRes = await api.get(`/accounting/general-ledger/?account_id=${id}`);
+        // Fetch general ledger transactions for this account WITH date filters
+        const ledgerRes = await api.get(`/accounting/general-ledger/?account_id=${id}&start_date=${startDate}&end_date=${endDate}`);
         
-        let runningBal = Number(ledgerRes.data.opening_balance || 0);;
+        let runningBal = Number(ledgerRes.data.opening_balance || 0);
         let totalDebit = 0;
         let totalCredit = 0;
-        const isDebitNormal = selectedAcc.account_type === 'Asset' || selectedAcc.account_type === 'Expense';
+        const isDebitNormal = ledgerRes.data.is_debit_normal;
+
+        // Create the Opening Balance row
+        const openingRow: Transaction = {
+          id: 'opening-balance',
+          date: startDate,
+          reference_id: '-',
+          description: 'Opening Balance',
+          debit: 0,
+          credit: 0,
+          running_balance: runningBal
+        };
 
         const txWithBalances = ledgerRes.data.transactions.map((tx: any) => {
           const debit = Number(tx.debit);
@@ -71,11 +91,11 @@ const AccountsDetails: React.FC = () => {
         setAccountTotals({
           debit: totalDebit,
           credit: totalCredit,
-          balance: runningBal
+          balance: runningBal // The final balance at the end of the period
         });
 
-        // Reverse to display newest transactions first
-        setTransactions(txWithBalances.reverse());
+        // Reverse to display newest transactions first, placing the Opening Balance at the very bottom
+        setTransactions([...txWithBalances.reverse(), openingRow]);
 
       } catch (err) {
         console.error("Failed to load account details", err);
@@ -85,9 +105,9 @@ const AccountsDetails: React.FC = () => {
     };
 
     if (id) fetchAccountData();
-  }, [id]);
+  }, [id, startDate, endDate]);
 
-  if (isLoading) {
+  if (isLoading && !account) {
     return <div className="p-10 text-center text-gray-500">Loading Account Details...</div>;
   }
 
@@ -130,24 +150,54 @@ const AccountsDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* Date Filters */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap gap-4 items-center">
+        <div className="flex flex-col">
+          <label className="text-xs font-bold text-gray-500 uppercase mb-1">Start Date</label>
+          <input 
+            type="date" 
+            value={startDate} 
+            onChange={(e) => setStartDate(e.target.value)}
+            className="border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
+          />
+        </div>
+        <div className="flex flex-col">
+          <label className="text-xs font-bold text-gray-500 uppercase mb-1">End Date</label>
+          <input 
+            type="date" 
+            value={endDate} 
+            onChange={(e) => setEndDate(e.target.value)}
+            className="border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-blue-500"
+          />
+        </div>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Current Balance</p>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Closing Balance</p>
           <p className="text-3xl font-black text-gray-900">₦{accountTotals.balance.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Total Debit</p>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Period Debit</p>
           <p className="text-2xl font-bold text-gray-700">₦{accountTotals.debit.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Total Credit</p>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Period Credit</p>
           <p className="text-2xl font-bold text-gray-700">₦{accountTotals.credit.toLocaleString()}</p>
         </div>
       </div>
 
       {/* Transactions Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+        
+        {/* Loading Overlay for Data Refresh */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        )}
+
         <div className="bg-gray-50 p-4 border-b border-gray-200">
           <h3 className="font-bold text-gray-800">Transaction History</h3>
         </div>
@@ -164,18 +214,22 @@ const AccountsDetails: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {transactions.map((tx, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">{tx.date}</td>
-                  <td className="px-6 py-4 text-sm font-mono text-gray-600">{tx.reference_id || '-'}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{tx.description}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-gray-700 text-right">{tx.debit > 0 ? `₦${tx.debit.toLocaleString()}` : '-'}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-gray-700 text-right">{tx.credit > 0 ? `₦${tx.credit.toLocaleString()}` : '-'}</td>
-                  <td className="px-6 py-4 text-sm font-black text-gray-900 text-right">₦{tx.running_balance?.toLocaleString()}</td>
-                </tr>
-              ))}
-              {transactions.length === 0 && (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400">No transactions recorded for this account.</td></tr>
+              {transactions.map((tx, idx) => {
+                const isOpeningRow = tx.id === 'opening-balance';
+                
+                return (
+                  <tr key={idx} className={isOpeningRow ? "bg-blue-50/30" : "hover:bg-gray-50"}>
+                    <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">{tx.date}</td>
+                    <td className="px-6 py-4 text-sm font-mono text-gray-600">{tx.reference_id || '-'}</td>
+                    <td className={`px-6 py-4 text-sm ${isOpeningRow ? 'font-bold italic text-gray-700' : 'font-medium text-gray-900'}`}>{tx.description}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-gray-700 text-right">{tx.debit > 0 ? `₦${tx.debit.toLocaleString()}` : '-'}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-gray-700 text-right">{tx.credit > 0 ? `₦${tx.credit.toLocaleString()}` : '-'}</td>
+                    <td className="px-6 py-4 text-sm font-black text-gray-900 text-right">₦{tx.running_balance?.toLocaleString()}</td>
+                  </tr>
+                );
+              })}
+              {transactions.length === 1 && transactions[0].id === 'opening-balance' && (
+                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400">No transactions recorded for this account in the selected period.</td></tr>
               )}
             </tbody>
           </table>

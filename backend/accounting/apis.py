@@ -10,12 +10,16 @@ from .serializers import (AccountListSerializer, AccountCreateSerializer, Accoun
                           JournalEntryCreateSerializer, JournalEntrySerializer, GeneralLedgerSerializer,
                           TrialBalanceSerializer, ReceivableSerializer, CustomerLedgerSerializer,
                           PayableSerializer, SupplierLedgerSerializer, ReportAccountSerializer,
-                          AccountingSettingsSerializer)
+                          AccountingSettingsSerializer, FinancialYearCreateSerializer, FinancialYearSerializer,
+                          AccountingPeriodUpdateSerializer)
 from .services import (create_account_service, update_account_service, create_manual_journal_entry,
-                       reverse_journal_entry_service, perform_year_end_close_service)
+                       reverse_journal_entry_service, perform_year_end_close_service, create_financial_year_service,
+                       update_accounting_period_status)
 from .selectors import (get_general_ledger, get_trial_balance, get_receivables, get_customer_ledger,
                         get_payables, get_supplier_ledger, get_cash_and_bank_balances, get_profit_and_loss,
-                        get_balance_sheet, get_cash_flow, get_tax_report, get_opening_balance, get_accounting_settings)
+                        get_balance_sheet, get_cash_flow, get_tax_report, get_opening_balance, get_accounting_settings,
+                        get_financial_years)
+
 
 
 
@@ -240,9 +244,14 @@ class ProfitLossReportApi(views.APIView):
             end_date=request.query_params.get('end_date')
         )
         return Response({
-            "revenues": ReportAccountSerializer(data['revenues'], many=True).data,
+            "sales_revenue": ReportAccountSerializer(data['sales_revenue'], many=True).data,
+            "other_operating_revenue": ReportAccountSerializer(data['other_operating_revenue'], many=True).data,
+            "other_income": ReportAccountSerializer(data['other_income'], many=True).data,
             "cogs": ReportAccountSerializer(data['cogs'], many=True).data,
             "operating_expenses": ReportAccountSerializer(data['operating_expenses'], many=True).data,
+            "finance_costs": ReportAccountSerializer(data['finance_costs'], many=True).data,
+            "tax_expenses": ReportAccountSerializer(data['tax_expenses'], many=True).data,
+            "other_expenses": ReportAccountSerializer(data['other_expenses'], many=True).data,
             "totals": data['totals']
         }, status=status.HTTP_200_OK)
 
@@ -323,5 +332,50 @@ class YearEndCloseApi(views.APIView):
                 "closing_entry_id": closing_entry.id
             }, status=status.HTTP_200_OK)
             
+        except ValidationError as e:
+            return Response({"error": getattr(e, 'message', str(e))}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FinancialYearApi(views.APIView):
+    permission_classes = [IsAuthenticated, IsTenantAdmin]
+
+    def get(self, request):
+        fys = get_financial_years(tenant=request.user.tenant)
+        serializer = FinancialYearSerializer(fys, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = FinancialYearCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            fy = create_financial_year_service(
+                user=request.user,
+                **serializer.validated_data
+            )
+            return Response({
+                "message": "Financial Year and periods generated successfully.",
+                "financial_year": FinancialYearSerializer(fy).data
+            }, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({"error": getattr(e, 'message', str(e))}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AccountingPeriodApi(views.APIView):
+    permission_classes = [IsAuthenticated, IsTenantAdmin]
+
+    def patch(self, request, period_id):
+        serializer = AccountingPeriodUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            period = update_accounting_period_status(
+                user=request.user,
+                period_id=period_id,
+                status=serializer.validated_data['status']
+            )
+            return Response({
+                "message": f"Period '{period.name}' is now {period.status}."
+            }, status=status.HTTP_200_OK)
         except ValidationError as e:
             return Response({"error": getattr(e, 'message', str(e))}, status=status.HTTP_400_BAD_REQUEST)

@@ -6,7 +6,7 @@ from .apis import (
     JournalEntryDetailApi, 
     JournalEntryReverseApi, GeneralLedgerApi, TrialBalanceApi, ReceivableListApi, ReceivableDetailApi,
     PayableListApi, PayableDetailApi, CashBankApi, ProfitLossReportApi, BalanceSheetReportApi,
-    CashFlowReportApi, TaxReportApi, AccountingSettingsApi
+    CashFlowReportApi, TaxReportApi, AccountingSettingsApi, FinancialYearApi, AccountingPeriodApi
 )
 
 urlpatterns = [
@@ -28,6 +28,8 @@ urlpatterns = [
     path('reports/cash-flow/', CashFlowReportApi.as_view(), name='report-cash-flow'),
     path('reports/tax/', TaxReportApi.as_view(), name='report-tax'),
     path('settings/', AccountingSettingsApi.as_view(), name='accounting-settings'),
+    path('financial-years/', FinancialYearApi.as_view(), name='financial-years'),
+    path('periods/<int:period_id>/', AccountingPeriodApi.as_view(), name='period-update'),
 
         
 ]
