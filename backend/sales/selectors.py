@@ -5,7 +5,7 @@ from django.db.models.functions import Coalesce
 from decimal import Decimal
 
 
-def get_sales_list(*, user, branch_id=None, search_term=None, ordering=None):
+def get_sales_list(*, user, branch_id=None, search_term=None, ordering=None, start_date=None, end_date=None):
     """
     Fetches sales history for the tenant.
     Optionally filters by branch.
@@ -44,6 +44,11 @@ def get_sales_list(*, user, branch_id=None, search_term=None, ordering=None):
     else:
         # Default fallback if no ordering is provided or an invalid one is sent
         query = query.order_by('-created_at')
+    
+    if start_date:
+        query = query.filter(created_at__date__gte=start_date)
+    if end_date:
+        query = query.filter(created_at__date__lte=end_date)
 
     return query
 

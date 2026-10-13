@@ -104,8 +104,12 @@ class SalesListApi(views.APIView):
         # Security: If user is not admin, force them to only see their branch
         # (You can implement this logic later if needed)
         search_term = request.GET.get('search', '').strip()
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        
 
-        sales = get_sales_list(user=request.user, branch_id=branch_id, search_term=search_term)
+        sales = get_sales_list(user=request.user, branch_id=branch_id, search_term=search_term, start_date=start_date,
+                               end_date=end_date)
         
         # Pagination could be added here later
          # 2. Initialize the paginator

@@ -64,6 +64,8 @@ const AdminSalesOrders: React.FC = () => {
   // --- Branch Filter State ---
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filterBranchId, setFilterBranchId] = useState<string | number>(isAdmin ? '' : (localBranchId || ''));
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
  
 
@@ -103,7 +105,9 @@ const AdminSalesOrders: React.FC = () => {
         params: { 
           page: currentPage, 
           search: searchTerm,
-          branch_id: filterBranchId || undefined // Pass branch_id for filtering
+          branch_id: filterBranchId || undefined, // Pass branch_id for filtering
+          start_date: startDate || undefined, // Send start date
+          end_date: endDate || undefined
         }
       });
 
@@ -128,7 +132,7 @@ const AdminSalesOrders: React.FC = () => {
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, currentPage, filterBranchId]); // Added filterBranchId dependency
+  }, [searchTerm, currentPage, filterBranchId, startDate, endDate]); // Added filterBranchId dependency
 
   // 4. Reset to page 1 ONLY when the search term or branch filter changes
   useEffect(() => {
@@ -184,6 +188,29 @@ const AdminSalesOrders: React.FC = () => {
         </div>
         
         <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
+          {/* Start and End Date Filters */}
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-bold uppercase">From</span>
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full sm:w-auto p-2.5 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-700 bg-gray-50 cursor-pointer"
+                title="Start Date"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-bold uppercase">To</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full sm:w-auto p-2.5 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-700 bg-gray-50 cursor-pointer"
+                title="End Date"
+              />
+            </div>
+          </div>
           {/* Branch Filter (Admins Only) */}
           {isAdmin && (
             <select 
