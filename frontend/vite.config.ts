@@ -15,6 +15,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'vite.svg'],
+      workbox: {
+        // Increase the limit to 3 MiB (or higher if needed)
+        maximumFileSizeToCacheInBytes: 3000000, 
+      },
       manifest: {
         name: 'TEQPOS Terminal',
         short_name: 'TEQPOS',
