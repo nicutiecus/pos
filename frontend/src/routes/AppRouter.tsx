@@ -129,7 +129,7 @@ const AppRouter: React.FC = () => {
              <Route path = "accounting/cash-bank" element={<CashBankAccounts/>}/>
              <Route path = "accounting/settings" element={<AccountingSettings/>}/>
              <Route path = "accounting/reports" element={<FinancialReports/>}/>
-             <Route path ="accounting/period"   element={<FinancialYearsManagement/>}/>
+             <Route path ="accounting/periods"   element={<FinancialYearsManagement/>}/>
 
 
 

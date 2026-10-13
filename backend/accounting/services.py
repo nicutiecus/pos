@@ -158,7 +158,7 @@ def record_journal_entry(*, tenant, branch=None, reference_id=None, description:
         branch=branch,
         reference_id=reference_id,
         description=description,
-        posting_date=posting_date,
+        date=posting_date,
         period=period,
         is_closing_entry=is_closing_entry
     )

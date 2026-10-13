@@ -163,7 +163,10 @@ const AdminLayout: React.FC = () => {
                   General Ledger
                 </Link>
                 <Link to="/admin/accounting/reports" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
-                  Financial reports
+                  Financial Reports
+                </Link>
+                <Link to="/admin/accounting/periods" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                  Financial Periods
                 </Link>
                 <Link to="/admin/accounting/settings" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                   Accounting Settings
