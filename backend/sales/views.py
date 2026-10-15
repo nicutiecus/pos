@@ -44,7 +44,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
             query = query.annotate(
                 branch_sales_and_reversals=Coalesce(Sum('ledger_entries__amount', filter=Q(
                     ledger_entries__branch_id=target_branch_id,
-                    ledger_entries__transaction_type=['Sale','Reversal']
+                    ledger_entries__transaction_type__in=['Sale','Reversal']
                 )), Decimal('0.00')),
                 branch_payments_returns=Coalesce(Sum('ledger_entries__amount', filter=Q(
                     ledger_entries__branch_id=target_branch_id,
