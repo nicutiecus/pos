@@ -44,15 +44,15 @@ class CustomerViewSet(viewsets.ModelViewSet):
             query = query.annotate(
                 branch_sales=Coalesce(Sum('ledger_entries__amount', filter=Q(
                     ledger_entries__branch_id=target_branch_id,
-                    ledger_entries__transaction_type='Sale'
+                    ledger_entries__transaction_type=['Sale','Reversal']
                 )), Decimal('0.00')),
                 branch_payments_returns=Coalesce(Sum('ledger_entries__amount', filter=Q(
                     ledger_entries__branch_id=target_branch_id,
-                    ledger_entries__transaction_type__in=['Payment', 'Return']
+                    ledger_entries__transaction_type__in=['Payment', 'Return','Void Sale']
                 )), Decimal('0.00'))
             ).annotate(
                 # Branch Debt = (Total Branch Sales) - (Total Branch Payments + Returns)
-                calculated_branch_debt=F('branch_sales') - F('branch_payments_returns')
+                calculated_branch_debt=F('branch_sales_and_reversals') - F('branch_payments_returns')
             )
         else:
             # If an Admin views all branches at once, just fallback to global debt
