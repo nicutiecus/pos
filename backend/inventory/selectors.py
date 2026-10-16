@@ -314,20 +314,25 @@ def get_purchase_orders(*, user, branch_id, search_query=None, status=None):
 
     return qs.order_by('created_at')
 
-def get_supplier_payments(*, user, branch_id, search_query=None):
+def get_supplier_payments(*, user, branch_id, search_query=None, start_date=None, end_date=None):
     qs= SupplierPayment.objects.filter(tenant=user.tenant).select_related('invoice','supplier','branch','processed_by')
 
     if user.role not in ['Admin', 'Tenant_Admin', 'Super_Admin']:
-            qs = qs.filter(branch=user.branch_id)
+        qs = qs.filter(branch=user.branch_id)
     elif branch_id:
-            # If Admin explicitly filters by a branch
-            qs = qs.filter(branch_id=branch_id)
+        # If Admin explicitly filters by a branch
+        qs = qs.filter(branch_id=branch_id)
 
     if search_query:
-            qs = qs.filter(
+        qs = qs.filter(
                 Q(id__icontains=search_query) | 
                 Q(supplier__name__icontains=search_query)
             )
+    if start_date:
+        qs=qs.filter(created_at__date__gte=start_date)
+    if end_date:
+        qs= qs.filter(created_at__date__lte=end_date)
+
     return qs.order_by('created_at')
 
 def get_supplier_ledger(*, user, supplier_id : str):

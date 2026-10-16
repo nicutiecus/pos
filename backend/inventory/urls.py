@@ -5,7 +5,8 @@ from .apis import (StockReceiveApi, StockLevelApi, InventoryLogListApi,
                    UpdateProductPriceApi, ProductPriceHistoryApi, OrganizationStockLevelsAPIView,
                    RemoveStockAPIView, InventoryBatchListAPIView, CategoryDeleteApi, PurchaseOrderCreateApi,
                    PurchaseOrderListApi, SupplierListCreateApi, SupplierDetailApi, PurchaseOrderDetailApi,
-                   PaySupplierCreditApi, SupplierLedgerApi, CancelPurchaseOrderView, UpdateBatchExpiryApi)
+                   PaySupplierCreditApi, SupplierLedgerApi, CancelPurchaseOrderView, UpdateBatchExpiryApi,
+                   SupplierPaymentListApi)
 
 urlpatterns = [
     path('purchase-orders/',PurchaseOrderListApi.as_view(), name='cpurchase-order-list'),
@@ -17,6 +18,7 @@ urlpatterns = [
     path('suppliers/<str:supplier_id>/ledger/', SupplierLedgerApi.as_view(), name='supplier-ledger'),
     path('suppliers/<str:supplier_id>/', SupplierDetailApi.as_view(), name='supplier-detail'),
     path('suppliers/<str:supplier_id>/accounts-payable/', PaySupplierCreditApi.as_view(), name='accounts-payable'),
+    path('supplier-payments/',SupplierPaymentListApi.as_view(), name="suplier-payment-list"),
     path('receive/', StockReceiveApi.as_view(), name='stock-receive'),
     path('batches/', InventoryBatchListAPIView.as_view(), name='inventory-batches'),
     path('batches/<uuid:batch_id>/', UpdateBatchExpiryApi.as_view(), name='update-batch-expiry'),

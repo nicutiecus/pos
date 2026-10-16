@@ -97,6 +97,9 @@ const AdminLayout: React.FC = () => {
                 <Link to="/admin/suppliers" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
                 Suppliers
                 </Link>
+                <Link to="/admin/supplier-payments" className="p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                Supplier Payments
+                </Link>
                 
               </div>
             )}

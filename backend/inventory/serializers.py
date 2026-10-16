@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import (Product, Category, InventoryBatch, StockTransferLog, ProductPriceHistory, 
-                     InventoryLog, Supplier, PurchaseOrder, SupplierLedger, PurchaseOrderItem )
+                     InventoryLog, Supplier, PurchaseOrder, SupplierLedger, PurchaseOrderItem,
+                      SupplierPayment )
 
 
 class StockReceiveItemSerializer(serializers.Serializer):
@@ -245,6 +246,36 @@ class SupplierSerializer(serializers.ModelSerializer):
         if Supplier.objects.filter(name__iexact=value, tenant=user.tenant).exists():
             raise serializers.ValidationError("A supplier with this name already exists.")
         return value
+
+from rest_framework import serializers
+from .models import SupplierPayment
+
+class SupplierPaymentSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True, default=None)
+    branch_name = serializers.CharField(source='branch.name', read_only=True, default=None)
+    processed_by_name = serializers.SerializerMethodField()
+    formatted_date = serializers.DateTimeField(source='created_at', format="%Y-%m-%dT%H:%M:%SZ", read_only=True)
+
+    class Meta:
+        model = SupplierPayment
+        fields = [
+            'id', 
+            'invoice', 
+            'transaction_type', 
+            'method', 
+            'amount', 
+            'reference_code', 
+            'supplier_name', 
+            'branch_name', 
+            'processed_by_name', 
+            'formatted_date'
+        ]
+
+    def get_processed_by_name(self, obj):
+        """Returns the cashier's full name or email if no name is set."""
+        if obj.processed_by:
+            return obj.processed_by.get_full_name() or obj.processed_by.email
+        return "System"
 
 
 class SupplierLedgerSerializer(serializers.ModelSerializer):

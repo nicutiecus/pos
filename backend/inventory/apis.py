@@ -7,7 +7,8 @@ from .serializers import (StockReceiveSerializer, ProductCreateSerializer,
                            StockTransferSerializer, StockTransferLogSerializer, ProductPriceHistorySerializer,
                            RemoveStockSerializer, PurchaseOrderCreateSerializer, InventoryBatchSerializer,
                            SupplierSerializer, PurchaseOrderListSerializer, PurchaseOrderDetailSerializer,
-                           PaySupplierCreditSerializer, SupplierLedgerSerializer, UpdateBatchExpirySerializer)
+                           PaySupplierCreditSerializer, SupplierLedgerSerializer, UpdateBatchExpirySerializer,
+                           SupplierPaymentSerializer)
 from .services import (receive_stock_service, create_product_service, 
                        create_category_service, accept_transfer_service, initiate_transfer_service,
                        reject_transfer_service, update_product_price_service, remove_stock_service,
@@ -671,7 +672,8 @@ class SupplierPaymentListApi(views.APIView):
             user= request.user,
             branch_id= branch_id,
             search_query= search_query
-
-
         )
-        return Response(supplier_payments, status=status.HTTP_200_OK)
+        paginator= StandardResultsSetPagination()
+        paginated_payments = paginator.paginate_queryset(supplier_payments, request)
+        serializer = SupplierPaymentSerializer(paginated_payments, many=True)
+        return paginator.get_paginated_response(serializer.data)

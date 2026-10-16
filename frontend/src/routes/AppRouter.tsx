@@ -25,6 +25,7 @@ import UserManagement from '../features/admin-dash/UserManagement';
 //import ProductCatalog from '../features/inventory/ProductCatalog';
 import PurchaseOrders from '../features/inventory/PurchaseOrders';
 import Suppliers from '../features/inventory/Suppliers';
+import SupplierPayments from '../features/inventory/SupplierPayments';
 import ProductList from '../features/inventory/ProductList';
 import InventoryReceiving from '../features/inventory/InventoryReceiving';
 //import StockTransferForm from '../features/inventory/transfers/StockTransferForm';
@@ -143,6 +144,7 @@ const AppRouter: React.FC = () => {
             <Route path="inventory/receive" element={<InventoryReceiving/>}/>
             <Route path="purchase-orders" element={<PurchaseOrders/>} />
             <Route path="suppliers" element={<Suppliers/>}/>
+            <Route path = "supplier-payments" element={<SupplierPayments/>}/>
             <Route path="inventory/remove" element={<StockRemoval/>}/>
             <Route path="returned-goods" element ={<ReturnedGoodsList/>}/>
             <Route path="branches" element={<BranchManagement />} />

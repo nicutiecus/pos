@@ -105,8 +105,8 @@ const AdminSalesOrders: React.FC = () => {
         params: { 
           page: currentPage, 
           search: searchTerm,
-          branch_id: filterBranchId || undefined, // Pass branch_id for filtering
-          start_date: startDate || undefined, // Send start date
+          branch_id: filterBranchId || undefined,
+          start_date: startDate || undefined,
           end_date: endDate || undefined
         }
       });
