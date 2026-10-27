@@ -100,7 +100,7 @@ const SalesPayments: React.FC = () => {
   // 4. Reset to page 1 ONLY when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchCustomer, filterBranchId, startDate, endDate]);
+  }, [searchCustomer, filterBranchId]);
 
   // Helper for Transaction Type Badges
   const getTypeBadge = (type: string) => {
