@@ -1066,7 +1066,8 @@ def record_return_accounting(
     journal_lines = []
     missing_accounts = []
 
-    total_refund = return_order.total_refund_amount
+    
+    total_refund = debt_forgiven_amount + cash_refund_amount
 
     # 1. Debit Sales Revenue (Reverse Revenue)
     if total_refund > 0:
@@ -1119,9 +1120,11 @@ def record_return_accounting(
         item_cogs = return_item.quantity_returned * return_item.original_item.cost_price_at_sale
         total_cogs_reversal += item_cogs
 
-        if return_item.condition == 'Restockable':
+        condition = str(return_item.condition).strip().lower() if return_item.condition else ""
+
+        if condition == 'restockable':
             total_restock_value += item_cogs
-        elif return_item.condition == 'Defective':
+        else: 
             total_loss_value += item_cogs
 
     # Credit COGS (Reverse the Cost of Sale)
