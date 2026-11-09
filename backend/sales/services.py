@@ -137,7 +137,9 @@ def create_sale_service(
                 # We snapshot cost_price here to know exactly how much profit we made later
                 subtotal = take_qty * product.selling_price
                 calculated_subtotal += subtotal
-               
+
+                total_cost_of_sales += take_qty * batch.cost_price_at_receipt
+
                 
                 SaleItem.objects.create(
                     order=order,
