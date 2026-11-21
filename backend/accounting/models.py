@@ -26,6 +26,7 @@ class Account(TenantAwareModel):
         EQUITY = 'Equity', 'Equity'
         # Revenue Subtypes
         SALES_REVENUE = 'Sales Revenue', 'Sales Revenue'
+        CONTRA_REVENUE = 'Contra Revenue', 'Contra Revenue'
         OTHER_OPERATING_REVENUE = 'Other Operating Revenue', 'Other Operating Revenue'
         OTHER_INCOME = 'Other Income', 'Other Income'
         # Expense Subtypes
