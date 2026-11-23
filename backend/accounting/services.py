@@ -1052,7 +1052,8 @@ def record_return_accounting(
     return_order, 
     debt_forgiven_amount: Decimal, 
     cash_refund_amount: Decimal, 
-    refund_method: str
+    refund_method: str,
+    posting_date = None
 ):
     """
     Translates a ReturnOrder into a balanced journal entry.
@@ -1173,7 +1174,8 @@ def record_return_accounting(
         branch=branch,
         reference_id=f"RET-{return_order.id}",
         description=f"Sales Return for Order #{return_order.original_order.id}",
-        lines_data=journal_lines
+        lines_data=journal_lines,
+        posting_date= posting_date
     )
 
     return {"success": True}
