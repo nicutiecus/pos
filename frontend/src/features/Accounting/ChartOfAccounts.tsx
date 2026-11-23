@@ -19,7 +19,7 @@ const SUB_TYPE_CHOICES: Record<string, string[]> = {
   Asset: ['Current Asset', 'Non-Current Asset'],
   Liability: ['Current Liability', 'Non-Current Liability'],
   Equity: ['Equity'],
-  Revenue: ['Sales Revenue', 'Other Operating Revenue', 'Other Income'],
+  Revenue: ['Sales Revenue','Contra Revenue', 'Other Operating Revenue', 'Other Income'],
   Expense: ['Cost of Goods Sold', 'Operating Expense', 'Finance Cost', 'Tax Expense', 'Other Expense']
 };
 
