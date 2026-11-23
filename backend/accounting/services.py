@@ -854,23 +854,24 @@ def reverse_debt_payment_journal_service(*, tenant, payment, user, reason: str =
     Handles the strict double-entry General Ledger reversal for a voided debt payment.
     Finds the original journal entry and processes the Debits/Credits reversal.
     """
-    try:
-        # Assuming your system saves the payment ID as the reference_id on the JournalEntry
-        original_journal = JournalEntry.objects.get(
+    refs = [r for r in [payment.reference_code, str(payment.id)] if r]
+    original_journal = (
+        JournalEntry.objects.filter(
             tenant=tenant,
-            reference_id=str(payment.id)
+            reference_id__in=refs,
+            description__startswith="Customer Debt Payment",
         )
-        
-        # Utilize your existing core GL reversal service
-        reverse_journal_entry_service(
-            user=user,
-            journal_entry_id=original_journal.id
-        )
-        
-    except JournalEntry.DoesNotExist:
-        # If no GL entry was created for the original payment (e.g., legacy data), 
-        # fail silently or log the anomaly depending on system strictness.
-        pass
+        .order_by("id")
+        .first()
+    )
+    if not original_journal:
+        logger.warning(f"No original GL journal entry found for reversed payment {payment.id} ({payment.reference_code})")
+        return None
+
+    return reverse_journal_entry_service(
+        user=user,
+        journal_entry_id=original_journal.id,
+    )
 
 
 @transaction.atomic
