@@ -112,10 +112,12 @@ class StaffCreationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     first_name = serializers.CharField(required=True)
     last_name = serializers.CharField(required=True)
+    is_active = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'password', 'role', 'branch_id', 'first_name', 'last_name', 'branch', 'custom_permissions']
+        fields = ['id', 'email', 'password', 'role', 'branch_id', 'first_name', 'last_name', 'branch', 'custom_permissions',
+                  'is_active']
 
     def validate_branch_id(self, value):
         user = self.context['request'].user

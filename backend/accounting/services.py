@@ -262,7 +262,8 @@ def record_sale_accounting(*, tenant, branch, order, payments: list, debt_amount
         branch=branch,
         reference_id=order.id,
         description=f"Sales Order #{order.id}",
-        lines_data=journal_lines
+        lines_data=journal_lines,
+        posting_date=posting_date
     )
 
     return {"success": True, "journal_entry": journal_entry}

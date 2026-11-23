@@ -18,7 +18,7 @@ interface User {
   role: 'Branch_Manager' | 'Cashier' | 'Tenant_Admin';
   branch?: string;
   branch_id?: string | number; // Added to pass to modal
-  is_active?: boolean; 
+  is_active: boolean; 
   custom_permissions?: string[];
 }
 
@@ -227,7 +227,7 @@ const UserManagement: React.FC = () => {
               <tr><td colSpan={5} className="p-8 text-center text-gray-400">No users found.</td></tr>
             ) : (
               users.map(user => {
-                const isActive = user.is_active !== false; 
+                const isActive = user.is_active; 
                 return (
                 <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
